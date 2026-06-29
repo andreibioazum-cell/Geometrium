@@ -17,11 +17,16 @@ void mat4_perspective(float* m, float fov, float aspect, float n, float f) {
     m[14] = (2.0f * f * n) / (n - f);
 }
 
-void mat4_rotate(float* m, float angle) {
+void mat4_rotate_y(float* m, float a) {
     mat4_identity(m);
-    m[0] = cosf(angle); m[2] = sinf(angle);
-    m[8] = -sinf(angle); m[10] = cosf(angle);
-    m[5] = cosf(angle * 0.5f); m[6] = sinf(angle * 0.5f); // Добавим вращение и по X
+    m[0] = cosf(a); m[2] = -sinf(a);
+    m[8] = sinf(a); m[10] = cosf(a);
+}
+
+void mat4_rotate_x(float* m, float a) {
+    mat4_identity(m);
+    m[5] = cosf(a); m[6] = sinf(a);
+    m[9] = -sinf(a); m[10] = cosf(a);
 }
 
 void mat4_mul(float* out, float* a, float* b) {
