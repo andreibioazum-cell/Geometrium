@@ -1,19 +1,50 @@
-// Добавь это в существующий math_utils.h
-void mat4_lookat(float* m, float* pos, float pitch, float yaw) {
-    float cosP = cosf(pitch), sinP = sinf(pitch);
-    float cosY = cosf(yaw), sinY = sinf(yaw);
-    
+#ifndef MATH_UTILS_H
+#define MATH_UTILS_H
+#include <math.h>
+#include <string.h>
+
+static void mat4_identity(float* m) {
+    memset(m, 0, 64); m[0]=m[5]=m[10]=m[15]=1.0f;
+}
+
+static void mat4_perspective(float* m, float fov, float aspect, float n, float f) {
+    float S = 1.0f / tanf(fov * 0.5f);
+    memset(m, 0, 64);
+    m[0] = S / aspect; m[5] = S;
+    m[10] = (f + n) / (n - f); m[11] = -1.0f; m[14] = (2.0f * f * n) / (n - f);
+}
+
+static void mat4_rotate_y(float* m, float a) {
     mat4_identity(m);
-    // Матрица вращения камеры (Look)
-    float rotX[16], rotY[16], res[16];
+    m[0] = cosf(a); m[2] = -sinf(a); m[8] = sinf(a); m[10] = cosf(a);
+}
+
+static void mat4_rotate_x(float* m, float a) {
+    mat4_identity(m);
+    m[5] = cosf(a); m[6] = sinf(a); m[9] = -sinf(a); m[10] = cosf(a);
+}
+
+static void mat4_translate(float* m, float x, float y, float z) {
+    mat4_identity(m);
+    m[12] = x; m[13] = y; m[14] = z;
+}
+
+static void mat4_mul(float* out, float* a, float* b) {
+    float res[16];
+    for (int c=0; c<4; c++) {
+        for (int r=0; r<4; r++) {
+            res[c*4+r] = a[0*4+r]*b[c*4+0] + a[1*4+r]*b[c*4+1] + a[2*4+r]*b[c*4+2] + a[3*4+r]*b[c*4+3];
+        }
+    }
+    memcpy(out, res, 64);
+}
+
+static void mat4_lookat(float* m, float* pos, float pitch, float yaw) {
+    float rotX[16], rotY[16], rot[16], trans[16];
     mat4_rotate_x(rotX, pitch);
     mat4_rotate_y(rotY, yaw);
-    mat4_mul(res, rotX, rotY);
-    
-    // Перенос (Move)
-    float trans[16];
-    mat4_identity(trans);
-    trans[12] = -pos[0]; trans[13] = -pos[1]; trans[14] = -pos[2];
-    
-    mat4_mul(m, res, trans);
+    mat4_mul(rot, rotX, rotY);
+    mat4_translate(trans, -pos[0], -pos[1], -pos[2]);
+    mat4_mul(m, rot, trans);
 }
+#endif
