@@ -8,91 +8,136 @@
 #include "world.h"
 #include "math_utils.h"
 
-// Строим VBO из видимых граней
+static void push_face(float* buf, int* idx, const float* v) {
+    memcpy(&buf[*idx], v, 30 * sizeof(float));
+    *idx += 30;
+}
+
+static int count_visible_faces(unsigned char f) {
+    int c = 0;
+    if (f & FACE_PX) c++;
+    if (f & FACE_NX) c++;
+    if (f & FACE_PY) c++;
+    if (f & FACE_NY) c++;
+    if (f & FACE_PZ) c++;
+    if (f & FACE_NZ) c++;
+    return c;
+}
+
 static void rebuild_world_vbo(struct engine* eng) {
     int faceCount = 0;
-    for (int x = 0; x < WORLD_SIZE; x++)
-        for (int y = 0; y < CHUNK_H; y++)
+
+    for (int x = 0; x < WORLD_SIZE; x++) {
+        for (int y = 0; y < CHUNK_H; y++) {
             for (int z = 0; z < WORLD_SIZE; z++) {
-                unsigned char f = face_visible[x][y][z];
-                for (int b = 0; b < 6; b++)
-                    if (f & (1 << b)) faceCount++;
+                faceCount += count_visible_faces(face_visible[x][y][z]);
             }
+        }
+    }
 
     eng->visibleFaceCount = faceCount;
     if (faceCount == 0) return;
 
-    int floatCount = faceCount * 6 * 5; // 6 вершин * 5 компонентов
-    float* buf = (float*)malloc(floatCount * sizeof(float));
+    int floatCount = faceCount * 6 * 5;
+    float* buf = (float*)malloc((size_t)floatCount * sizeof(float));
+    if (!buf) return;
+
     int idx = 0;
 
-    for (int x = 0; x < WORLD_SIZE; x++)
-        for (int y = 0; y < CHUNK_H; y++)
+    for (int x = 0; x < WORLD_SIZE; x++) {
+        for (int y = 0; y < CHUNK_H; y++) {
             for (int z = 0; z < WORLD_SIZE; z++) {
                 unsigned char f = face_visible[x][y][z];
                 if (!f) continue;
-                float bx = (float)x, by = (float)y, bz = (float)(-z);
 
-                #define FACE(cond, v) if(f & cond){ \
-                    float d[] = v; \
-                    memcpy(&buf[idx], d, 30*sizeof(float)); idx+=30; }
+                float bx = (float)x;
+                float by = (float)y;
+                float bz = (float)(-z);
 
-                FACE(FACE_PZ, {
-                    bx-0.5f,by-0.5f,bz+0.5f,0,0,
-                    bx+0.5f,by-0.5f,bz+0.5f,1,0,
-                    bx+0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx-0.5f,by-0.5f,bz+0.5f,0,0,
-                    bx+0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx-0.5f,by+0.5f,bz+0.5f,0,1})
+                if (f & FACE_PZ) {
+                    const float v[30] = {
+                        bx-0.5f, by-0.5f, bz+0.5f, 0,0,
+                        bx+0.5f, by-0.5f, bz+0.5f, 1,0,
+                        bx+0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx-0.5f, by-0.5f, bz+0.5f, 0,0,
+                        bx+0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx-0.5f, by+0.5f, bz+0.5f, 0,1
+                    };
+                    push_face(buf, &idx, v);
+                }
 
-                FACE(FACE_NZ, {
-                    bx-0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx-0.5f,by+0.5f,bz-0.5f,0,1,
-                    bx+0.5f,by+0.5f,bz-0.5f,1,1,
-                    bx-0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx+0.5f,by+0.5f,bz-0.5f,1,1,
-                    bx+0.5f,by-0.5f,bz-0.5f,1,0})
+                if (f & FACE_NZ) {
+                    const float v[30] = {
+                        bx-0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx-0.5f, by+0.5f, bz-0.5f, 0,1,
+                        bx+0.5f, by+0.5f, bz-0.5f, 1,1,
+                        bx-0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx+0.5f, by+0.5f, bz-0.5f, 1,1,
+                        bx+0.5f, by-0.5f, bz-0.5f, 1,0
+                    };
+                    push_face(buf, &idx, v);
+                }
 
-                FACE(FACE_PX, {
-                    bx+0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx+0.5f,by+0.5f,bz-0.5f,0,1,
-                    bx+0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx+0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx+0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx+0.5f,by-0.5f,bz+0.5f,1,0})
+                if (f & FACE_PX) {
+                    const float v[30] = {
+                        bx+0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx+0.5f, by+0.5f, bz-0.5f, 0,1,
+                        bx+0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx+0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx+0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx+0.5f, by-0.5f, bz+0.5f, 1,0
+                    };
+                    push_face(buf, &idx, v);
+                }
 
-                FACE(FACE_NX, {
-                    bx-0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx-0.5f,by-0.5f,bz+0.5f,1,0,
-                    bx-0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx-0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx-0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx-0.5f,by+0.5f,bz-0.5f,0,1})
+                if (f & FACE_NX) {
+                    const float v[30] = {
+                        bx-0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx-0.5f, by-0.5f, bz+0.5f, 1,0,
+                        bx-0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx-0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx-0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx-0.5f, by+0.5f, bz-0.5f, 0,1
+                    };
+                    push_face(buf, &idx, v);
+                }
 
-                FACE(FACE_PY, {
-                    bx-0.5f,by+0.5f,bz-0.5f,0,0,
-                    bx-0.5f,by+0.5f,bz+0.5f,1,0,
-                    bx+0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx-0.5f,by+0.5f,bz-0.5f,0,0,
-                    bx+0.5f,by+0.5f,bz+0.5f,1,1,
-                    bx+0.5f,by+0.5f,bz-0.5f,0,1})
+                if (f & FACE_PY) {
+                    const float v[30] = {
+                        bx-0.5f, by+0.5f, bz-0.5f, 0,0,
+                        bx-0.5f, by+0.5f, bz+0.5f, 1,0,
+                        bx+0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx-0.5f, by+0.5f, bz-0.5f, 0,0,
+                        bx+0.5f, by+0.5f, bz+0.5f, 1,1,
+                        bx+0.5f, by+0.5f, bz-0.5f, 0,1
+                    };
+                    push_face(buf, &idx, v);
+                }
 
-                FACE(FACE_NY, {
-                    bx-0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx+0.5f,by-0.5f,bz-0.5f,1,0,
-                    bx+0.5f,by-0.5f,bz+0.5f,1,1,
-                    bx-0.5f,by-0.5f,bz-0.5f,0,0,
-                    bx+0.5f,by-0.5f,bz+0.5f,1,1,
-                    bx-0.5f,by-0.5f,bz+0.5f,0,1})
-
-                #undef FACE
+                if (f & FACE_NY) {
+                    const float v[30] = {
+                        bx-0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx+0.5f, by-0.5f, bz-0.5f, 1,0,
+                        bx+0.5f, by-0.5f, bz+0.5f, 1,1,
+                        bx-0.5f, by-0.5f, bz-0.5f, 0,0,
+                        bx+0.5f, by-0.5f, bz+0.5f, 1,1,
+                        bx-0.5f, by-0.5f, bz+0.5f, 0,1
+                    };
+                    push_face(buf, &idx, v);
+                }
             }
+        }
+    }
 
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
+
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
-    glBufferData(GL_ARRAY_BUFFER, floatCount * sizeof(float),
-                 buf, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER,
+                 (GLsizeiptr)(floatCount * sizeof(float)),
+                 buf,
+                 GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+
     free(buf);
 }
 
@@ -102,7 +147,8 @@ static void render_world(struct engine* eng) {
 
     float proj[16], view[16], mvp[16];
     mat4_perspective(proj, GAME_FOV,
-                     (float)eng->width / eng->height, 0.1f, 80.0f);
+                     (float)eng->width / (float)eng->height,
+                     0.1f, 80.0f);
     mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
     mat4_mul(mvp, proj, view);
 
