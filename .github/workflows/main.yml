@@ -1,0 +1,28 @@
+name: Build Geometrium
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+    - name: Get STB
+      run: |
+        wget -O stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+    - name: Build C code
+      run: |
+        $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang -shared -fPIC main.c $ANDROID_NDK_ROOT/sources/android/native_app_glue/android_native_app_glue.c -o libmain.so -I. -I$ANDROID_NDK_ROOT/sources/android/native_app_glue -landroid -llog -lGLESv2 -lEGL -lm
+    - name: Packaging
+      run: |
+        mkdir -p staging/lib/arm64-v8a staging/assets
+        cp libmain.so staging/lib/arm64-v8a/
+        # Если есть текстуры, клади их в staging/assets/
+        $ANDROID_HOME/build-tools/34.0.0/aapt package -f -M AndroidManifest.xml -I $ANDROID_HOME/platforms/android-34/android.jar -F unsigned.apk staging/
+        keytool -genkey -v -keystore d.keystore -storepass android -alias a -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Geometrium"
+        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks d.keystore --ks-pass pass:android --out Geometrium.apk unsigned.apk
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Geometrium-Build
+        path: Geometrium.apk
