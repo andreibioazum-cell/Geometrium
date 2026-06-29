@@ -5,86 +5,125 @@
 #include "cube.h"
 #include "math_utils.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+struct engine {
+    struct android_app* app;
+    EGLDisplay display;
+    EGLContext context;
+    EGLSurface surface;
+    int32_t width;
+    int32_t height;
+    GLuint program;
+};
 
-const char* vShaderSrc = 
-    "attribute vec4 pos; attribute vec2 tex; varying vec2 vTex; uniform mat4 mvp;"
-    "void main() { gl_Position = mvp * pos; vTex = tex; }";
-const char* fShaderSrc = 
-    "precision mediump float; varying vec2 vTex; uniform sampler2D s; "
-    "void main() { gl_FragColor = texture2D(s, vTex); }";
-
-GLuint create_shader(const char* src, GLenum type) {
-    GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, NULL);
-    glCompileShader(s);
-    return s;
-}
-
-// Простая функция перемножения матриц 4x4
+// Простейшая матрица умножения
 void mat4_mul(float* res, float* a, float* b) {
     float tmp[16];
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            tmp[i * 4 + j] = 0.0f;
-            for (int k = 0; k < 4; k++)
-                tmp[i * 4 + j] += a[i * 4 + k] * b[k * 4 + j];
+    for (int i=0; i<4; i++) {
+        for (int j=0; j<4; j++) {
+            tmp[i*4+j] = a[i*4+0]*b[0*4+j] + a[i*4+1]*b[1*4+j] + a[i*4+2]*b[2*4+j] + a[i*4+3]*b[3*4+j];
         }
     }
-    for (int i = 0; i < 16; i++) res[i] = tmp[i];
+    for (int i=0; i<16; i++) res[i] = tmp[i];
+}
+
+static int engine_init_display(struct engine* engine) {
+    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    eglInitialize(display, 0, 0);
+
+    const EGLint attribs[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_BLUE_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_RED_SIZE, 8,
+        EGL_DEPTH_SIZE, 16, EGL_NONE
+    };
+    EGLConfig config; EGLint numConfigs;
+    eglChooseConfig(display, attribs, &config, 1, &numConfigs);
+    
+    EGLSurface surface = eglCreateWindowSurface(display, config, engine->app->window, NULL);
+    EGLContext context = eglCreateContext(display, config, NULL, (EGLint[]){EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE});
+
+    if (eglMakeCurrent(display, surface, surface, context) == EGL_FALSE) return -1;
+
+    eglQuerySurface(display, surface, EGL_WIDTH, &engine->width);
+    eglQuerySurface(display, surface, EGL_HEIGHT, &engine->height);
+
+    engine->display = display; engine->surface = surface; engine->context = context;
+
+    // Шейдеры: добавили цвет от координат, чтобы видеть грани без текстур
+    const char* vSrc = "attribute vec4 p; attribute vec2 t; varying vec2 vT; uniform mat4 m; void main() { gl_Position = m*p; vT = t; }";
+    const char* fSrc = "precision mediump float; varying vec2 vT; void main() { gl_FragColor = vec4(vT, 1.0, 1.0); }";
+
+    GLuint vs = glCreateShader(GL_VERTEX_SHADER); glShaderSource(vs, 1, &vSrc, NULL); glCompileShader(vs);
+    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER); glShaderSource(fs, 1, &fSrc, NULL); glCompileShader(fs);
+    engine->program = glCreateProgram();
+    glAttachShader(engine->program, vs); glAttachShader(engine->program, fs);
+    glLinkProgram(engine->program);
+
+    return 0;
+}
+
+static void engine_draw_frame(struct engine* engine) {
+    if (engine->display == NULL) return;
+
+    glClearColor(0.2f, 0.5f, 0.9f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+    glUseProgram(engine->program);
+
+    float proj[16], view[16], mvp[16];
+    float aspect = (float)engine->width / (float)engine->height;
+    mat4_perspective(proj, 1.0f, aspect, 0.1f, 100.0f);
+    
+    static float angle = 0; angle += 0.02f;
+    mat4_translate(view, 0, 0, -5.0f);
+    
+    // Вращение (упрощенно через трансляцию для теста)
+    view[12] = sinf(angle) * 2.0f; 
+
+    mat4_mul(mvp, proj, view);
+    GLint mLoc = glGetUniformLocation(engine->program, "m");
+    glUniformMatrix4fv(mLoc, 1, GL_FALSE, mvp);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), cube_vertices);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), &cube_vertices[3]);
+    glEnableVertexAttribArray(1);
+
+    glViewport(0, 0, engine->width, engine->height);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+
+    eglSwapBuffers(engine->display, engine->surface);
+}
+
+static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
+    struct engine* engine = (struct engine*)app->userData;
+    switch (cmd) {
+        case APP_CMD_INIT_WINDOW:
+            if (engine->app->window != NULL) {
+                engine_init_display(engine);
+                engine_draw_frame(engine);
+            }
+            break;
+        case APP_CMD_TERM_WINDOW:
+            engine->display = EGL_NO_DISPLAY; // Очистка при закрытии
+            break;
+    }
 }
 
 void android_main(struct android_app* state) {
-    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    eglInitialize(display, 0, 0);
-    
-    EGLConfig config; EGLint numConfigs;
-    EGLint attribs[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT, EGL_BLUE_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_RED_SIZE, 8, EGL_DEPTH_SIZE, 16, EGL_NONE };
-    eglChooseConfig(display, attribs, &config, 1, &numConfigs);
-    EGLSurface surface = eglCreateWindowSurface(display, config, state->window, NULL);
-    EGLContext context = eglCreateContext(display, config, NULL, (EGLint[]){EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE});
-    eglMakeCurrent(display, surface, surface, context);
+    struct engine engine = {0};
+    state->userData = &engine;
+    state->onAppCmd = engine_handle_cmd;
+    engine.app = state;
 
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, create_shader(vShaderSrc, GL_VERTEX_SHADER));
-    glAttachShader(prog, create_shader(fShaderSrc, GL_FRAGMENT_SHADER));
-    glLinkProgram(prog);
-    glUseProgram(prog);
-
-    GLuint mvpLoc = glGetUniformLocation(prog, "mvp");
-    float proj[16], view[16], mvp[16];
-    // Настраиваем перспективу (FOV, Aspect Ratio, Near, Far)
-    mat4_perspective(proj, 1.0f, 1080.0f/1920.0f, 0.1f, 100.0f);
-
-    glEnable(GL_DEPTH_TEST);
-    float angle = 0;
-
-    while (!state->destroyRequested) {
-        int events;
+    while (1) {
+        int ident, events;
         struct android_poll_source* source;
-        // ИСПРАВЛЕНО: Используем ALooper_pollOnce вместо ALooper_pollAll
-        while (ALooper_pollOnce(0, NULL, &events, (void**)&source) >= 0) {
-            if (source) source->process(state, source);
+        while ((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
+            if (source != NULL) source->process(state, source);
+            if (state->destroyRequested != 0) return;
         }
-
-        glClearColor(0.5f, 0.8f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        angle += 0.02f;
-        // Двигаем камеру назад и немного вращаем для вида
-        mat4_translate(view, sinf(angle) * 0.5f, -1.0f, -5.0f);
-        
-        // MVP = Projection * View
-        mat4_mul(mvp, proj, view);
-        glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp); 
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5*sizeof(float), cube_vertices);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), &cube_vertices[3]);
-        glEnableVertexAttribArray(1);
-
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-        eglSwapBuffers(display, surface);
+        if (engine.display != NULL) engine_draw_frame(&engine);
     }
 }
