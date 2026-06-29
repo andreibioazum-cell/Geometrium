@@ -1,4 +1,4 @@
-name: Build Geometrium Multi-Arch
+name: Build Geometrium
 on: [push, workflow_dispatch]
 jobs:
   build:
@@ -6,59 +6,46 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - uses: nttld/setup-ndk@v1
+    - name: Setup NDK
+      uses: nttld/setup-ndk@v1
       with:
         ndk-version: r25c
 
     - name: Get STB
-      run: |
-        wget -O stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+      run: wget -O stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
 
     - name: Build Libraries
       run: |
-        # Путь к компиляторам
         TOOLCHAIN=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin
-        
-        # 1. Сборка для arm64-v8a (Современные телефоны)
-        $TOOLCHAIN/aarch64-linux-android21-clang -shared -fPIC \
-          main.c $ANDROID_NDK_ROOT/sources/android/native_app_glue/android_native_app_glue.c \
-          -o libmain_64.so -I. -I$ANDROID_NDK_ROOT/sources/android/native_app_glue \
-          -landroid -llog -lGLESv2 -lEGL -lm
+        # Build arm64 (v8a)
+        $TOOLCHAIN/aarch64-linux-android21-clang -shared -fPIC main.c \
+          $ANDROID_NDK_ROOT/sources/android/native_app_glue/android_native_app_glue.c \
+          -o libmain_64.so -I. -I$ANDROID_NDK_ROOT/sources/android/native_app_glue -landroid -llog -lGLESv2 -lEGL -lm
+        # Build armv7 (32-bit)
+        $TOOLCHAIN/armv7a-linux-androideabi21-clang -shared -fPIC main.c \
+          $ANDROID_NDK_ROOT/sources/android/native_app_glue/android_native_app_glue.c \
+          -o libmain_32.so -I. -I$ANDROID_NDK_ROOT/sources/android/native_app_glue -landroid -llog -lGLESv2 -lEGL -lm
 
-        # 2. Сборка для armeabi-v7a (Старые 32-битные телефоны)
-        $TOOLCHAIN/armv7a-linux-androideabi21-clang -shared -fPIC \
-          main.c $ANDROID_NDK_ROOT/sources/android/native_app_glue/android_native_app_glue.c \
-          -o libmain_32.so -I. -I$ANDROID_NDK_ROOT/sources/android/native_app_glue \
-          -landroid -llog -lGLESv2 -lEGL -lm
-
-    - name: Package APK
+    - name: Package and Align
       run: |
-        # Создаем структуру папок внутри APK
-        mkdir -p staging/lib/arm64-v8a
-        mkdir -p staging/lib/armeabi-v7a
-        mkdir -p staging/assets
-
-        # Копируем библиотеки с правильными именами (Android ищет именно libmain.so)
+        mkdir -p staging/lib/arm64-v8a staging/lib/armeabi-v7a staging/assets
         cp libmain_64.so staging/lib/arm64-v8a/libmain.so
         cp libmain_32.so staging/lib/armeabi-v7a/libmain.so
         
-        # Если есть файлы в папке assets, копируем их
-        if [ -d "assets" ]; then cp -r assets/* staging/assets/; fi
-
-        # Инструменты сборки
         BUILD_TOOLS=$ANDROID_HOME/build-tools/34.0.0
-        PLATFORM=$ANDROID_HOME/platforms/android-34/android.jar
+        
+        # 1. Создаем начальный пакет
+        $BUILD_TOOLS/aapt package -f -M AndroidManifest.xml -I $ANDROID_HOME/platforms/android-34/android.jar -F unsigned.apk staging/
+        
+        # 2. ZIPALIGN (КРИТИЧЕСКИ ВАЖНО ДЛЯ ANDROID 14)
+        $BUILD_TOOLS/zipalign -v 4 unsigned.apk aligned.apk
 
-        # Сборка не подписанного APK
-        $BUILD_TOOLS/aapt package -f -M AndroidManifest.xml -I $PLATFORM -F unsigned.apk staging/
+        # 3. Подпись
+        keytool -genkey -v -keystore d.keystore -storepass android -alias a -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=D"
+        $BUILD_TOOLS/apksigner sign --ks d.keystore --ks-pass pass:android --out Geometrium.apk aligned.apk
 
-        # Создание ключа (только для теста, в реальности ключ хранят в секретах)
-        keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-
-        # Подпись APK
-        $BUILD_TOOLS/apksigner sign --ks debug.keystore --ks-pass pass:android --out Geometrium.apk unsigned.apk
-
-    - uses: actions/upload-artifact@v4
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
       with:
-        name: Geometrium-Universal-APK
+        name: Geometrium-Final
         path: Geometrium.apk
