@@ -7,18 +7,19 @@
 #include "math_utils.h"
 #include "world.h"
 
-#define JOY_RADIUS 120.0f
-#define JOY_Y_OFFSET 200.0f
-#define JOY_X_OFFSET 180.0f
-#define JUMP_BTN_SIZE 100.0f
-#define JUMP_BTN_OFFSET 180.0f
+#define JOY_RADIUS 70.0f
+#define JOY_Y_OFFSET 160.0f
+#define JOY_X_OFFSET 140.0f
+#define STICK_RADIUS 28.0f
+#define JUMP_BTN_SIZE 55.0f
+#define JUMP_BTN_OFFSET 130.0f
+#define PI 3.14159265f
 
 struct engine {
     struct android_app* app;
     EGLDisplay display; EGLSurface surface; EGLContext context;
     int32_t width, height;
     GLuint program;
-    GLuint uiProgram;
 
     float camPos[3], camRot[2];
     float velY;
@@ -41,16 +42,19 @@ bool is_solid(float x, float y, float z) {
     return map[ix][iy][iz] > 0;
 }
 
-// Проверка земли под ногами (4 угла вокруг игрока)
 bool check_ground(float x, float y, float z) {
     float w = 0.25f;
     return is_solid(x-w, y, z-w) || is_solid(x+w, y, z-w) ||
            is_solid(x-w, y, z+w) || is_solid(x+w, y, z+w);
 }
 
-// Проверка стен (2 точки по высоте)
 bool check_wall(float x, float y, float z) {
     return is_solid(x, y - 0.5f, z) || is_solid(x, y - 1.0f, z);
+}
+
+// Проверка головы (камера не должна проходить сквозь блоки)
+bool check_head(float x, float y, float z) {
+    return is_solid(x, y, z) || is_solid(x, y - 0.3f, z);
 }
 
 // ============= Физика =============
@@ -59,7 +63,6 @@ static void apply_physics(struct engine* eng) {
     if (eng->velY < -0.5f) eng->velY = -0.5f;
     float nextY = eng->camPos[1] + eng->velY;
 
-    // Пол
     eng->onGround = false;
     if (check_ground(eng->camPos[0], nextY - 1.7f, eng->camPos[2])) {
         eng->velY = 0;
@@ -68,12 +71,10 @@ static void apply_physics(struct engine* eng) {
         eng->camPos[1] = nextY;
     }
 
-    // Потолок
     if (eng->velY > 0 && check_ground(eng->camPos[0], nextY + 0.2f, eng->camPos[2])) {
         eng->velY = 0;
     }
 
-    // Движение
     if (eng->isMoving && (eng->moveDirX != 0 || eng->moveDirZ != 0)) {
         float speed = 0.08f;
         float yaw = eng->camRot[1];
@@ -82,11 +83,15 @@ static void apply_physics(struct engine* eng) {
         float dx = (fX * -eng->moveDirZ + rX * eng->moveDirX) * speed;
         float dz = (fZ * -eng->moveDirZ + rZ * eng->moveDirX) * speed;
 
-        // Раздельная проверка по осям
         if (!check_wall(eng->camPos[0] + dx, eng->camPos[1], eng->camPos[2]))
             eng->camPos[0] += dx;
         if (!check_wall(eng->camPos[0], eng->camPos[1], eng->camPos[2] + dz))
             eng->camPos[2] += dz;
+    }
+
+    // Камера не проходит сквозь блоки
+    if (check_head(eng->camPos[0], eng->camPos[1], eng->camPos[2])) {
+        eng->camPos[1] += 0.05f;
     }
 
     if (eng->camPos[1] < -5.0f) {
@@ -111,18 +116,17 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         float y = AMotionEvent_getY(event, i);
         int id = AMotionEvent_getPointerId(event, i);
 
-        // Кнопка прыжка (справа внизу)
         float jbX = eng->width - JUMP_BTN_OFFSET;
         float jbY = eng->height - JUMP_BTN_OFFSET;
         if (code == AMOTION_EVENT_ACTION_DOWN || code == AMOTION_EVENT_ACTION_POINTER_DOWN) {
             float djx = x - jbX, djy = y - jbY;
-            if (sqrtf(djx*djx + djy*djy) < JUMP_BTN_SIZE && eng->onGround) {
+            if (sqrtf(djx*djx + djy*djy) < JUMP_BTN_SIZE * 1.5f && eng->onGround) {
                 eng->velY = 0.22f;
                 continue;
             }
         }
 
-        if (x < eng->width / 2) { // Левая часть - Джойстик
+        if (x < eng->width / 2) {
             if (code == AMOTION_EVENT_ACTION_DOWN || code == AMOTION_EVENT_ACTION_POINTER_DOWN) {
                 eng->joyX = JOY_X_OFFSET;
                 eng->joyY = eng->height - JOY_Y_OFFSET;
@@ -130,7 +134,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
                 eng->movePointerId = id;
                 eng->moveDirX = 0; eng->moveDirZ = 0;
             }
-        } else { // Правая часть - Обзор
+        } else {
             if (code == AMOTION_EVENT_ACTION_DOWN || code == AMOTION_EVENT_ACTION_POINTER_DOWN) {
                 eng->lastTouchX = x; eng->lastTouchY = y;
                 eng->lookPointerId = id;
@@ -138,7 +142,6 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         }
     }
 
-    // Обработка движения пальцев
     if (code == AMOTION_EVENT_ACTION_MOVE) {
         for (int i = 0; i < pCount; i++) {
             float x = AMotionEvent_getX(event, i);
@@ -159,11 +162,8 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             if (id == eng->lookPointerId) {
                 eng->camRot[1] += (x - eng->lastTouchX) * 0.004f;
                 eng->camRot[0] += (y - eng->lastTouchY) * 0.004f;
-
-                // ОГРАНИЧЕНИЕ КАМЕРЫ: не дать перевернуться
                 if (eng->camRot[0] > 1.4f) eng->camRot[0] = 1.4f;
                 if (eng->camRot[0] < -1.4f) eng->camRot[0] = -1.4f;
-
                 eng->lastTouchX = x; eng->lastTouchY = y;
             }
         }
@@ -180,7 +180,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
     return 1;
 }
 
-// ============= UI Рендер =============
+// ============= UI =============
 static GLuint uiProg = 0;
 
 static void init_ui_shader() {
@@ -193,24 +193,51 @@ static void init_ui_shader() {
     glLinkProgram(uiProg);
 }
 
-static void draw_circle(float cx, float cy, float r, int w, int h, float cr, float cg, float cb, float ca) {
+// Рисует кольцо (обводку без заливки)
+static void draw_ring(float cx, float cy, float r, float thickness, int w, int h, float cr, float cg, float cb, float ca) {
     float ndcX = (cx / w) * 2.0f - 1.0f;
     float ndcY = 1.0f - (cy / h) * 2.0f;
-    float rx = (r / w) * 2.0f;
-    float ry = (r / h) * 2.0f;
+    float rx_out = (r / w) * 2.0f;
+    float ry_out = (r / h) * 2.0f;
+    float rx_in = ((r - thickness) / w) * 2.0f;
+    float ry_in = ((r - thickness) / h) * 2.0f;
 
-    float verts[64 * 2];
     int segs = 32;
+    float verts[128 * 2]; // segs * 2 вершины * 2 координаты
     for (int i = 0; i < segs; i++) {
-        float a = (float)i / segs * 6.283f;
-        verts[i*2+0] = ndcX + cosf(a) * rx;
-        verts[i*2+1] = ndcY + sinf(a) * ry;
+        float a = (float)i / segs * 2.0f * PI;
+        verts[i*4+0] = ndcX + cosf(a) * rx_out;
+        verts[i*4+1] = ndcY + sinf(a) * ry_out;
+        verts[i*4+2] = ndcX + cosf(a) * rx_in;
+        verts[i*4+3] = ndcY + sinf(a) * ry_in;
     }
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg, "col"), cr, cg, cb, ca);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
     glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, segs);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, segs * 2);
+}
+
+// Рисует заполненный круг (для стика)
+static void draw_circle_filled(float cx, float cy, float r, int w, int h, float cr, float cg, float cb, float ca) {
+    float ndcX = (cx / w) * 2.0f - 1.0f;
+    float ndcY = 1.0f - (cy / h) * 2.0f;
+    float rx = (r / w) * 2.0f;
+    float ry = (r / h) * 2.0f;
+
+    int segs = 32;
+    float verts[66];
+    verts[0] = ndcX; verts[1] = ndcY;
+    for (int i = 0; i <= segs; i++) {
+        float a = (float)i / segs * 2.0f * PI;
+        verts[(i+1)*2+0] = ndcX + cosf(a) * rx;
+        verts[(i+1)*2+1] = ndcY + sinf(a) * ry;
+    }
+    glUseProgram(uiProg);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), cr, cg, cb, ca);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
+    glEnableVertexAttribArray(0);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, segs + 2);
 }
 
 static void draw_ui(struct engine* eng) {
@@ -220,18 +247,35 @@ static void draw_ui(struct engine* eng) {
 
     float jx = JOY_X_OFFSET, jy = eng->height - JOY_Y_OFFSET;
 
-    // Круг джойстика (внешний)
-    draw_circle(jx, jy, JOY_RADIUS, eng->width, eng->height, 1, 1, 1, 0.2f);
+    // Обводка джойстика (чёрная)
+    draw_ring(jx, jy, JOY_RADIUS, 3.0f, eng->width, eng->height, 0, 0, 0, 0.8f);
 
-    // Ручка джойстика (внутренний)
+    // Стик (чёрный заполненный круг)
     float hx = jx + eng->moveDirX * JOY_RADIUS * 0.7f;
     float hy = jy + eng->moveDirZ * JOY_RADIUS * 0.7f;
-    draw_circle(hx, hy, 40, eng->width, eng->height, 1, 1, 1, 0.5f);
+    draw_circle_filled(hx, hy, STICK_RADIUS, eng->width, eng->height, 0, 0, 0, 0.7f);
 
-    // Кнопка прыжка
+    // Кнопка прыжка (чёрная обводка)
     float bx = eng->width - JUMP_BTN_OFFSET;
     float by = eng->height - JUMP_BTN_OFFSET;
-    draw_circle(bx, by, JUMP_BTN_SIZE, eng->width, eng->height, 0.3f, 0.9f, 0.3f, 0.4f);
+    draw_ring(bx, by, JUMP_BTN_SIZE, 3.0f, eng->width, eng->height, 0, 0, 0, 0.8f);
+
+    // Стрелка вверх внутри кнопки прыжка
+    float arrowSize = JUMP_BTN_SIZE * 0.4f;
+    float ndcBx = (bx / eng->width) * 2.0f - 1.0f;
+    float ndcBy = 1.0f - (by / eng->height) * 2.0f;
+    float arx = (arrowSize / eng->width) * 2.0f;
+    float ary = (arrowSize / eng->height) * 2.0f;
+    float arrow[] = {
+        ndcBx, ndcBy + ary,
+        ndcBx - arx, ndcBy - ary * 0.5f,
+        ndcBx + arx, ndcBy - ary * 0.5f
+    };
+    glUseProgram(uiProg);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 0, 0, 0, 0.7f);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, arrow);
+    glEnableVertexAttribArray(0);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
@@ -251,7 +295,8 @@ static void engine_draw_frame(struct engine* eng) {
     glUseProgram(eng->program);
 
     float proj[16], view[16], model[16], mvp[16], tmp[16];
-    mat4_perspective(proj, 1.0f, (float)eng->width/eng->height, 0.1f, 100.0f);
+    // FOV увеличен до 90 градусов (1.57 радиан)
+    mat4_perspective(proj, 1.57f, (float)eng->width/eng->height, 0.1f, 100.0f);
     mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5*4, cube_vertices);
@@ -260,9 +305,9 @@ static void engine_draw_frame(struct engine* eng) {
     glEnableVertexAttribArray(1);
 
     GLint mLoc = glGetUniformLocation(eng->program, "m");
-    for (int x=0; x<WORLD_SIZE; x++) {
-        for (int y=0; y<CHUNK_H; y++) {
-            for (int z=0; z<WORLD_SIZE; z++) {
+    for (int x = 0; x < WORLD_SIZE; x++) {
+        for (int y = 0; y < CHUNK_H; y++) {
+            for (int z = 0; z < WORLD_SIZE; z++) {
                 if (map[x][y][z]) {
                     mat4_translate(model, (float)x, (float)y, (float)-z);
                     mat4_mul(tmp, proj, view);
@@ -274,9 +319,7 @@ static void engine_draw_frame(struct engine* eng) {
         }
     }
 
-    // UI поверх мира
     draw_ui(eng);
-
     eglSwapBuffers(eng->display, eng->surface);
 }
 
