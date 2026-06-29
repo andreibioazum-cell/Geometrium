@@ -1,4 +1,4 @@
- #include <android_native_app_glue.h>
+#include <android_native_app_glue.h>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
@@ -7,21 +7,17 @@
 #include "math_utils.h"
 #include "physics.h"
 #include "input.h"
-#include "ui.h"
 #include "render.h"
 
-// Определения глобальных массивов
 unsigned char map[WORLD_SIZE][CHUNK_H][WORLD_SIZE];
-unsigned char face_visible[WORLD_SIZE][CHUNK_H][WORLD_SIZE];
+unsigned char face_vis[WORLD_SIZE][CHUNK_H][WORLD_SIZE];
 
 static void engine_draw_frame(struct engine* eng) {
     if (!eng->display) return;
     apply_physics(eng);
 
-    eglQuerySurface(eng->display, eng->surface,
-                    EGL_WIDTH, &eng->width);
-    eglQuerySurface(eng->display, eng->surface,
-                    EGL_HEIGHT, &eng->height);
+    eglQuerySurface(eng->display, eng->surface, EGL_WIDTH, &eng->width);
+    eglQuerySurface(eng->display, eng->surface, EGL_HEIGHT, &eng->height);
 
     glViewport(0, 0, eng->width, eng->height);
     glClearColor(0.5f, 0.8f, 1.0f, 1.0f);
@@ -39,7 +35,8 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         eng->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         eglInitialize(eng->display, 0, 0);
 
-        EGLConfig config; EGLint n;
+        EGLConfig config;
+        EGLint n;
         EGLint att[] = {
             EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
             EGL_DEPTH_SIZE, 16,
@@ -48,13 +45,12 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         eglChooseConfig(eng->display, att, &config, 1, &n);
         eng->surface = eglCreateWindowSurface(
             eng->display, config, eng->app->window, NULL);
-        EGLint ctxAtt[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+        EGLint ctxAtt[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
         eng->context = eglCreateContext(
             eng->display, config, NULL, ctxAtt);
         eglMakeCurrent(eng->display, eng->surface,
                        eng->surface, eng->context);
 
-        // Шейдер мира
         const char* vS =
             "attribute vec4 p; attribute vec2 t;"
             "varying vec2 vT; uniform mat4 m;"
@@ -64,10 +60,13 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
             "void main(){"
             "  gl_FragColor=vec4(vT.x, vT.y+0.3, 0.4, 1.0);"
             "}";
+
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vs, 1, &vS, NULL); glCompileShader(vs);
+        glShaderSource(vs, 1, &vS, NULL);
+        glCompileShader(vs);
         GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fs, 1, &fS, NULL); glCompileShader(fs);
+        glShaderSource(fs, 1, &fS, NULL);
+        glCompileShader(fs);
         eng->program = glCreateProgram();
         glAttachShader(eng->program, vs);
         glAttachShader(eng->program, fs);
