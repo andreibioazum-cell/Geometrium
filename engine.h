@@ -14,13 +14,10 @@
 #define JUMP_BTN_OFFSET 130.0f
 #define PI              3.14159265f
 
-// Хитбокс игрока
 #define PLAYER_W        0.4f
 #define PLAYER_H        2.0f
 #define EYE_H           1.65f
 #define HEAD_MARGIN     0.15f
-
-// FOV ~85.5° (90° минус 5%)
 #define GAME_FOV        1.4915f
 
 struct engine {
