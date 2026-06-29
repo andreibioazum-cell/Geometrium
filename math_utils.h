@@ -38,15 +38,19 @@ static void mat4_rotate_x(float* m, float a) {
 
 static void mat4_translate(float* m, float x, float y, float z) {
     mat4_identity(m);
-    m[12] = x; m[13] = y; m[14] = z;
+    m[12] = x;
+    m[13] = y;
+    m[14] = z;
 }
 
 static void mat4_mul(float* out, const float* a, const float* b) {
     float res[16];
     for (int c = 0; c < 4; c++)
         for (int r = 0; r < 4; r++)
-            res[c*4+r] = a[0*4+r]*b[c*4+0] + a[1*4+r]*b[c*4+1]
-                       + a[2*4+r]*b[c*4+2] + a[3*4+r]*b[c*4+3];
+            res[c * 4 + r] = a[0 * 4 + r] * b[c * 4 + 0]
+                            + a[1 * 4 + r] * b[c * 4 + 1]
+                            + a[2 * 4 + r] * b[c * 4 + 2]
+                            + a[3 * 4 + r] * b[c * 4 + 3];
     memcpy(out, res, 64);
 }
 
