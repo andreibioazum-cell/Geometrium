@@ -11,7 +11,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-/* Загрузка текстуры из assets */
 static GLuint load_texture(struct android_app* app, const char* filename) {
     AAssetManager* mgr = app->activity->assetManager;
     AAsset* asset = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
@@ -37,28 +36,41 @@ static GLuint load_texture(struct android_app* app, const char* filename) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
                  GL_RGBA, GL_UNSIGNED_BYTE, img);
     stbi_image_free(img);
-
     return tex;
 }
 
-static void push_quad(float* buf, int* idx,
-                      float x0,float y0,float z0, float u0,float v0,
-                      float x1,float y1,float z1, float u1,float v1,
-                      float x2,float y2,float z2, float u2,float v2,
-                      float x3,float y3,float z3, float u3,float v3) {
+/* 8 floats на вершину: x y z  u v  nx ny nz */
+static void push_quad_n(float* buf, int* idx,
+    float x0,float y0,float z0, float u0,float v0,
+    float x1,float y1,float z1, float u1,float v1,
+    float x2,float y2,float z2, float u2,float v2,
+    float x3,float y3,float z3, float u3,float v3,
+    float nx, float ny, float nz) {
+    /* Треугольник 1: 0-1-2 */
     buf[(*idx)++]=x0; buf[(*idx)++]=y0; buf[(*idx)++]=z0;
     buf[(*idx)++]=u0; buf[(*idx)++]=v0;
+    buf[(*idx)++]=nx; buf[(*idx)++]=ny; buf[(*idx)++]=nz;
+
     buf[(*idx)++]=x1; buf[(*idx)++]=y1; buf[(*idx)++]=z1;
     buf[(*idx)++]=u1; buf[(*idx)++]=v1;
+    buf[(*idx)++]=nx; buf[(*idx)++]=ny; buf[(*idx)++]=nz;
+
     buf[(*idx)++]=x2; buf[(*idx)++]=y2; buf[(*idx)++]=z2;
     buf[(*idx)++]=u2; buf[(*idx)++]=v2;
+    buf[(*idx)++]=nx; buf[(*idx)++]=ny; buf[(*idx)++]=nz;
 
+    /* Треугольник 2: 0-2-3 */
     buf[(*idx)++]=x0; buf[(*idx)++]=y0; buf[(*idx)++]=z0;
     buf[(*idx)++]=u0; buf[(*idx)++]=v0;
+    buf[(*idx)++]=nx; buf[(*idx)++]=ny; buf[(*idx)++]=nz;
+
     buf[(*idx)++]=x2; buf[(*idx)++]=y2; buf[(*idx)++]=z2;
     buf[(*idx)++]=u2; buf[(*idx)++]=v2;
+    buf[(*idx)++]=nx; buf[(*idx)++]=ny; buf[(*idx)++]=nz;
+
     buf[(*idx)++]=x3; buf[(*idx)++]=y3; buf[(*idx)++]=z3;
     buf[(*idx)++]=u3; buf[(*idx)++]=v3;
+    buf[(*idx)++]=nx; buf[(*idx)++]=ny; buf[(*idx)++]=nz;
 }
 
 static void rebuild_vbo(struct engine* eng) {
@@ -80,12 +92,12 @@ static void rebuild_vbo(struct engine* eng) {
     eng->visibleFaceCount = fc;
     if (fc == 0) { eng->meshDirty = false; return; }
 
-    int cnt = fc * 6 * 5;
+    /* 6 вершин на грань, 8 floats на вершину */
+    int cnt = fc * 6 * 8;
     float* buf = (float*)malloc((size_t)cnt * sizeof(float));
     if (!buf) return;
     int idx = 0;
 
-    /* Смещение: буферный (0,0) = мировой (loadCenterX - LOAD_RADIUS, loadCenterZ - LOAD_RADIUS) */
     int ox = eng->loadCenterX - LOAD_RADIUS;
     int oz = eng->loadCenterZ - LOAD_RADIUS;
 
@@ -104,29 +116,35 @@ static void rebuild_vbo(struct engine* eng) {
                 float z0 = bz-0.5f, z1 = bz+0.5f;
 
                 if (f & FACE_XP)
-                    push_quad(buf,&idx,
+                    push_quad_n(buf,&idx,
                         x1,y0,z0,0,1, x1,y0,z1,1,1,
-                        x1,y1,z1,1,0, x1,y1,z0,0,0);
+                        x1,y1,z1,1,0, x1,y1,z0,0,0,
+                        1,0,0);
                 if (f & FACE_XN)
-                    push_quad(buf,&idx,
+                    push_quad_n(buf,&idx,
                         x0,y0,z1,0,1, x0,y0,z0,1,1,
-                        x0,y1,z0,1,0, x0,y1,z1,0,0);
+                        x0,y1,z0,1,0, x0,y1,z1,0,0,
+                        -1,0,0);
                 if (f & FACE_YP)
-                    push_quad(buf,&idx,
+                    push_quad_n(buf,&idx,
                         x0,y1,z1,0,0, x1,y1,z1,1,0,
-                        x1,y1,z0,1,1, x0,y1,z0,0,1);
+                        x1,y1,z0,1,1, x0,y1,z0,0,1,
+                        0,1,0);
                 if (f & FACE_YN)
-                    push_quad(buf,&idx,
+                    push_quad_n(buf,&idx,
                         x0,y0,z0,0,0, x1,y0,z0,1,0,
-                        x1,y0,z1,1,1, x0,y0,z1,0,1);
+                        x1,y0,z1,1,1, x0,y0,z1,0,1,
+                        0,-1,0);
                 if (f & FACE_ZP)
-                    push_quad(buf,&idx,
+                    push_quad_n(buf,&idx,
                         x1,y0,z0,0,1, x0,y0,z0,1,1,
-                        x0,y1,z0,1,0, x1,y1,z0,0,0);
+                        x0,y1,z0,1,0, x1,y1,z0,0,0,
+                        0,0,-1);
                 if (f & FACE_ZN)
-                    push_quad(buf,&idx,
+                    push_quad_n(buf,&idx,
                         x0,y0,z1,0,1, x1,y0,z1,1,1,
-                        x1,y1,z1,1,0, x0,y1,z1,0,0);
+                        x1,y1,z1,1,0, x0,y1,z1,0,0,
+                        0,0,1);
             }
 
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
@@ -146,7 +164,6 @@ static void render_world(struct engine* eng) {
     glEnable(GL_DEPTH_TEST);
     glUseProgram(eng->program);
 
-    /* Текстура */
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, eng->texture);
     glUniform1i(glGetUniformLocation(eng->program, "tex"), 0);
@@ -161,11 +178,18 @@ static void render_world(struct engine* eng) {
     glUniformMatrix4fv(glGetUniformLocation(eng->program, "m"),
                        1, GL_FALSE, mvp);
 
+    /* stride = 8 floats = 32 bytes */
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, (void*)0);
+    /* pos: offset 0 */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, (void*)12);
+    /* uv: offset 12 */
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 32, (void*)12);
     glEnableVertexAttribArray(1);
+    /* normal: offset 20 */
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 32, (void*)20);
+    glEnableVertexAttribArray(2);
+
     glDrawArrays(GL_TRIANGLES, 0, eng->visibleFaceCount * 6);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -243,7 +267,6 @@ static void draw_ui(struct engine* eng) {
 
     float jx = JOY_X_OFFSET;
     float jy = eng->height - JOY_Y_OFFSET;
-
     draw_ring(jx,jy,JOY_RADIUS,4.0f,
               eng->width,eng->height, 0,0,0,1.0f);
 
