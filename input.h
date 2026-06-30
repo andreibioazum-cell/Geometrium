@@ -18,13 +18,9 @@ static int32_t engine_handle_input(struct android_app* app,
     if (code == AMOTION_EVENT_ACTION_DOWN ||
         code == AMOTION_EVENT_ACTION_POINTER_DOWN) {
 
-        int pi;
-        if (code == AMOTION_EVENT_ACTION_DOWN) {
-            pi = 0;
-        } else {
-            pi = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
-                 >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-        }
+        int pi = (code == AMOTION_EVENT_ACTION_DOWN) ? 0 :
+            (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+            >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
 
         float x  = AMotionEvent_getX(event, pi);
         float y  = AMotionEvent_getY(event, pi);
@@ -32,8 +28,7 @@ static int32_t engine_handle_input(struct android_app* app,
 
         float jbX = eng->width - JUMP_BTN_OFFSET;
         float jbY = eng->height - JUMP_BTN_OFFSET;
-        float djx = x - jbX;
-        float djy = y - jbY;
+        float djx = x - jbX, djy = y - jbY;
 
         if (sqrtf(djx * djx + djy * djy) < JUMP_BTN_SIZE * 1.3f) {
             if (eng->onGround) {
@@ -55,7 +50,6 @@ static int32_t engine_handle_input(struct android_app* app,
             eng->lastTouchY = y;
             eng->lookPointerId = id;
         }
-
         return 1;
     }
 
@@ -66,9 +60,8 @@ static int32_t engine_handle_input(struct android_app* app,
             int   id = AMotionEvent_getPointerId(event, i);
 
             if (id == eng->movePointerId && eng->isMoving) {
-                float dx = x - eng->joyX;
-                float dy = y - eng->joyY;
-                float d  = sqrtf(dx * dx + dy * dy);
+                float dx = x - eng->joyX, dy = y - eng->joyY;
+                float d = sqrtf(dx * dx + dy * dy);
                 if (d > 10.0f) {
                     float clamp = d > JOY_RADIUS ? JOY_RADIUS : d;
                     eng->moveDirX = (dx / d) * (clamp / JOY_RADIUS);
@@ -78,7 +71,6 @@ static int32_t engine_handle_input(struct android_app* app,
                     eng->moveDirZ = 0;
                 }
             }
-
             if (id == eng->lookPointerId) {
                 eng->camRot[1] += (x - eng->lastTouchX) * 0.004f;
                 eng->camRot[0] += (y - eng->lastTouchY) * 0.004f;
@@ -93,21 +85,17 @@ static int32_t engine_handle_input(struct android_app* app,
 
     if (code == AMOTION_EVENT_ACTION_UP ||
         code == AMOTION_EVENT_ACTION_POINTER_UP) {
-
         int pi = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
                  >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
         int id = AMotionEvent_getPointerId(event, pi);
-
         if (id == eng->movePointerId) {
             eng->isMoving = false;
             eng->moveDirX = 0;
             eng->moveDirZ = 0;
             eng->movePointerId = -1;
         }
-        if (id == eng->lookPointerId) {
+        if (id == eng->lookPointerId)
             eng->lookPointerId = -1;
-        }
-
         return 1;
     }
 
