@@ -36,17 +36,16 @@ static GLuint load_texture(struct android_app* app, const char* filename) {
     return tex;
 }
 
-/* 8 floats: x y z u v nx ny nz */
 static void push_quad_n(float* buf, int* idx,
-    float x0,float y0,float z0, float u0,float v0,
-    float x1,float y1,float z1, float u1,float v1,
-    float x2,float y2,float z2, float u2,float v2,
-    float x3,float y3,float z3, float u3,float v3,
+    float x0, float y0, float z0, float u0, float v0,
+    float x1, float y1, float z1, float u1, float v1,
+    float x2, float y2, float z2, float u2, float v2,
+    float x3, float y3, float z3, float u3, float v3,
     float nx, float ny, float nz) {
     float vd[6][8] = {
-        {x0,y0,z0,u0,v0,nx,ny,nz},{x1,y1,z1,u1,v1,nx,ny,nz},
-        {x2,y2,z2,u2,v2,nx,ny,nz},{x0,y0,z0,u0,v0,nx,ny,nz},
-        {x2,y2,z2,u2,v2,nx,ny,nz},{x3,y3,z3,u3,v3,nx,ny,nz}
+        {x0,y0,z0,u0,v0,nx,ny,nz}, {x1,y1,z1,u1,v1,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz}, {x0,y0,z0,u0,v0,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz}, {x3,y3,z3,u3,v3,nx,ny,nz}
     };
     memcpy(&buf[*idx], vd, sizeof(vd));
     *idx += 48;
@@ -87,21 +86,40 @@ static void rebuild_vbo(struct engine* eng) {
                 float bx = (float)(ox + x);
                 float by = (float)y;
                 float bz = (float)(-(oz + z));
-                float x0=bx-0.5f,x1=bx+0.5f;
-                float y0=by-0.5f,y1=by+0.5f;
-                float z0=bz-0.5f,z1=bz+0.5f;
+                float x0 = bx - 0.5f, x1 = bx + 0.5f;
+                float y0 = by - 0.5f, y1 = by + 0.5f;
+                float z0 = bz - 0.5f, z1 = bz + 0.5f;
 
-                if(f&FACE_XP) push_quad_n(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0, 1,0,0);
-                if(f&FACE_XN) push_quad_n(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0);
-                if(f&FACE_YP) push_quad_n(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1, 0,1,0);
-                if(f&FACE_YN) push_quad_n(buf,&idx,x0,y0,z0,0,0,x1,y0,z0,1,0,x1,y0,z1,1,1,x0,y0,z1,0,1, 0,-1,0);
-                if(f&FACE_ZP) push_quad_n(buf,&idx,x1,y0,z0,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x1,y1,z0,0,0, 0,0,-1);
-                if(f&FACE_ZN) push_quad_n(buf,&idx,x0,y0,z1,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x0,y1,z1,0,0, 0,0,1);
+                if (f & FACE_XP)
+                    push_quad_n(buf, &idx,
+                        x1,y0,z0,0,1, x1,y0,z1,1,1,
+                        x1,y1,z1,1,0, x1,y1,z0,0,0, 1,0,0);
+                if (f & FACE_XN)
+                    push_quad_n(buf, &idx,
+                        x0,y0,z1,0,1, x0,y0,z0,1,1,
+                        x0,y1,z0,1,0, x0,y1,z1,0,0, -1,0,0);
+                if (f & FACE_YP)
+                    push_quad_n(buf, &idx,
+                        x0,y1,z1,0,0, x1,y1,z1,1,0,
+                        x1,y1,z0,1,1, x0,y1,z0,0,1, 0,1,0);
+                if (f & FACE_YN)
+                    push_quad_n(buf, &idx,
+                        x0,y0,z0,0,0, x1,y0,z0,1,0,
+                        x1,y0,z1,1,1, x0,y0,z1,0,1, 0,-1,0);
+                if (f & FACE_ZP)
+                    push_quad_n(buf, &idx,
+                        x1,y0,z0,0,1, x0,y0,z0,1,1,
+                        x0,y1,z0,1,0, x1,y1,z0,0,0, 0,0,-1);
+                if (f & FACE_ZN)
+                    push_quad_n(buf, &idx,
+                        x0,y0,z1,0,1, x1,y0,z1,1,1,
+                        x1,y1,z1,1,0, x0,y1,z1,0,0, 0,0,1);
             }
 
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
-    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(cnt*sizeof(float)), buf, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(cnt * sizeof(float)),
+                 buf, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     free(buf);
     eng->meshDirty = false;
@@ -117,8 +135,6 @@ static void render_world(struct engine* eng) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, eng->texture);
     glUniform1i(glGetUniformLocation(eng->program, "tex"), 0);
-
-    /* Передаём позицию камеры для тумана */
     glUniform3f(glGetUniformLocation(eng->program, "camPos"),
                 eng->camPos[0], eng->camPos[1], eng->camPos[2]);
 
@@ -128,7 +144,8 @@ static void render_world(struct engine* eng) {
                      0.1f, 120.0f);
     mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
     mat4_mul(mvp, proj, view);
-    glUniformMatrix4fv(glGetUniformLocation(eng->program, "m"), 1, GL_FALSE, mvp);
+    glUniformMatrix4fv(glGetUniformLocation(eng->program, "m"),
+                       1, GL_FALSE, mvp);
 
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, (void*)0);
@@ -146,156 +163,183 @@ static GLuint uiProg = 0;
 
 static void init_ui_shader(void) {
     const char* vS = "attribute vec4 p; void main(){ gl_Position=p; }";
-    const char* fS = "precision mediump float; uniform vec4 col; void main(){ gl_FragColor=col; }";
+    const char* fS =
+        "precision mediump float; uniform vec4 col;"
+        "void main(){ gl_FragColor=col; }";
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vs,1,&vS,NULL); glCompileShader(vs);
+    glShaderSource(vs, 1, &vS, NULL); glCompileShader(vs);
     GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fs,1,&fS,NULL); glCompileShader(fs);
+    glShaderSource(fs, 1, &fS, NULL); glCompileShader(fs);
     uiProg = glCreateProgram();
-    glAttachShader(uiProg,vs); glAttachShader(uiProg,fs);
+    glAttachShader(uiProg, vs);
+    glAttachShader(uiProg, fs);
     glLinkProgram(uiProg);
-    glDeleteShader(vs); glDeleteShader(fs);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
 }
 
-static void draw_ring(float cx,float cy,float r,float thick,int w,int h,float cr,float cg,float cb,float ca) {
-    float ndcX=(cx/w)*2.0f-1.0f, ndcY=1.0f-(cy/h)*2.0f;
-    float rx_o=(r/w)*2.0f, ry_o=(r/h)*2.0f;
-    float rx_i=((r-thick)/w)*2.0f, ry_i=((r-thick)/h)*2.0f;
-    int segs=32;
-    float verts[(32+1)*4];
-    for(int i=0;i<=segs;i++){
-        float a=(float)i/segs*2.0f*PI;
-        float cs=cosf(a),sn=sinf(a);
-        verts[i*4+0]=ndcX+cs*rx_o; verts[i*4+1]=ndcY+sn*ry_o;
-        verts[i*4+2]=ndcX+cs*rx_i; verts[i*4+3]=ndcY+sn*ry_i;
+static void draw_ring(float cx, float cy, float r, float thick,
+                      int w, int h,
+                      float cr, float cg, float cb, float ca) {
+    float ndcX = (cx / w) * 2.0f - 1.0f;
+    float ndcY = 1.0f - (cy / h) * 2.0f;
+    float rx_o = (r / w) * 2.0f, ry_o = (r / h) * 2.0f;
+    float rx_i = ((r - thick) / w) * 2.0f, ry_i = ((r - thick) / h) * 2.0f;
+    int segs = 32;
+    float verts[(32 + 1) * 4];
+    for (int i = 0; i <= segs; i++) {
+        float a = (float)i / segs * 2.0f * PI;
+        float cs = cosf(a), sn = sinf(a);
+        verts[i * 4 + 0] = ndcX + cs * rx_o;
+        verts[i * 4 + 1] = ndcY + sn * ry_o;
+        verts[i * 4 + 2] = ndcX + cs * rx_i;
+        verts[i * 4 + 3] = ndcY + sn * ry_i;
     }
     glUseProgram(uiProg);
-    glUniform4f(glGetUniformLocation(uiProg,"col"),cr,cg,cb,ca);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,verts);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), cr, cg, cb, ca);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
     glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLE_STRIP,0,(segs+1)*2);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, (segs + 1) * 2);
 }
 
-static void draw_circle(float cx,float cy,float r,int w,int h,float cr,float cg,float cb,float ca) {
-    float ndcX=(cx/w)*2.0f-1.0f, ndcY=1.0f-(cy/h)*2.0f;
-    float rx=(r/w)*2.0f, ry=(r/h)*2.0f;
-    int segs=24;
-    float verts[(24+2)*2];
-    verts[0]=ndcX; verts[1]=ndcY;
-    for(int i=0;i<=segs;i++){
-        float a=(float)i/segs*2.0f*PI;
-        verts[(i+1)*2+0]=ndcX+cosf(a)*rx;
-        verts[(i+1)*2+1]=ndcY+sinf(a)*ry;
+static void draw_circle(float cx, float cy, float r,
+                         int w, int h,
+                         float cr, float cg, float cb, float ca) {
+    float ndcX = (cx / w) * 2.0f - 1.0f;
+    float ndcY = 1.0f - (cy / h) * 2.0f;
+    float rx = (r / w) * 2.0f, ry = (r / h) * 2.0f;
+    int segs = 24;
+    float verts[(24 + 2) * 2];
+    verts[0] = ndcX;
+    verts[1] = ndcY;
+    for (int i = 0; i <= segs; i++) {
+        float a = (float)i / segs * 2.0f * PI;
+        verts[(i + 1) * 2 + 0] = ndcX + cosf(a) * rx;
+        verts[(i + 1) * 2 + 1] = ndcY + sinf(a) * ry;
     }
     glUseProgram(uiProg);
-    glUniform4f(glGetUniformLocation(uiProg,"col"),cr,cg,cb,ca);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,verts);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), cr, cg, cb, ca);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
     glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLE_FAN,0,segs+2);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, segs + 2);
+}
+
+/* Рисует ровный прямоугольник по центру (cx,cy), размер в пикселях */
+static void draw_rect(float cx, float cy, float hw, float hh,
+                      int sw, int sh,
+                      float cr, float cg, float cb, float ca) {
+    float nx = (cx / sw) * 2.0f - 1.0f;
+    float ny = 1.0f - (cy / sh) * 2.0f;
+    float rw = (hw / sw) * 2.0f;
+    float rh = (hh / sh) * 2.0f;
+    float verts[] = {
+        nx - rw, ny - rh,
+        nx + rw, ny - rh,
+        nx + rw, ny + rh,
+        nx - rw, ny - rh,
+        nx + rw, ny + rh,
+        nx - rw, ny + rh
+    };
+    glUseProgram(uiProg);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), cr, cg, cb, ca);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
+    glEnableVertexAttribArray(0);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 static void draw_ui(struct engine* eng) {
+    int sw = eng->width;
+    int sh = eng->height;
+
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Прицел — маленький крестик */
-    float cx = eng->width / 2.0f;
-    float cy = eng->height / 2.0f;
-    float cs = 8.0f;
-    float ndcCx = (cx/eng->width)*2.0f-1.0f;
-    float ndcCy = 1.0f-(cy/eng->height)*2.0f;
-    float csx = (cs/eng->width)*2.0f;
-    float csy = (cs/eng->height)*2.0f;
-    float tw = (1.5f/eng->width)*2.0f;
-    float th = (1.5f/eng->height)*2.0f;
-    /* Горизонтальная линия */
-    float cross[] = {
-        ndcCx-csx, ndcCy-th, ndcCx+csx, ndcCy-th,
-        ndcCx+csx, ndcCy+th, ndcCx-csx, ndcCy-th,
-        ndcCx+csx, ndcCy+th, ndcCx-csx, ndcCy+th,
-        /* Вертикальная линия */
-        ndcCx-tw, ndcCy-csy, ndcCx+tw, ndcCy-csy,
-        ndcCx+tw, ndcCy+csy, ndcCx-tw, ndcCy-csy,
-        ndcCx+tw, ndcCy+csy, ndcCx-tw, ndcCy+csy
-    };
-    glUseProgram(uiProg);
-    glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,0.8f);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,cross);
-    glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES,0,12);
+    /* Прицел — ровный крестик по центру */
+    float ccx = sw / 2.0f;
+    float ccy = sh / 2.0f;
+    draw_rect(ccx, ccy, 10.0f, 1.5f, sw, sh, 1, 1, 1, 0.9f);
+    draw_rect(ccx, ccy, 1.5f, 10.0f, sw, sh, 1, 1, 1, 0.9f);
+    /* Чёрная обводка крестика */
+    draw_rect(ccx, ccy, 11.0f, 0.5f, sw, sh, 0, 0, 0, 0.5f);
+    draw_rect(ccx, ccy, 0.5f, 11.0f, sw, sh, 0, 0, 0, 0.5f);
 
     /* Джойстик */
     float jx = JOY_X_OFFSET;
-    float jy = eng->height - JOY_Y_OFFSET;
-    draw_ring(jx,jy,JOY_RADIUS,3.0f,eng->width,eng->height,0,0,0,1.0f);
-    float hx = jx + eng->moveDirX*JOY_RADIUS*0.6f;
-    float hy = jy + eng->moveDirZ*JOY_RADIUS*0.6f;
-    draw_circle(hx,hy,STICK_RADIUS,eng->width,eng->height,0,0,0,1.0f);
+    float jy = sh - JOY_Y_OFFSET;
+    draw_ring(jx, jy, JOY_RADIUS, 3.0f, sw, sh, 0, 0, 0, 1.0f);
+    float hx = jx + eng->moveDirX * JOY_RADIUS * 0.6f;
+    float hy = jy + eng->moveDirZ * JOY_RADIUS * 0.6f;
+    draw_circle(hx, hy, STICK_RADIUS, sw, sh, 0, 0, 0, 1.0f);
 
-    /* Прыжок */
-    float bx = eng->width - JUMP_BTN_OFFSET;
-    float by = eng->height - JUMP_BTN_OFFSET;
-    draw_ring(bx,by,JUMP_BTN_SIZE,3.0f,eng->width,eng->height,0,0,0,1.0f);
-    float as = JUMP_BTN_SIZE*0.35f;
-    float nx = (bx/eng->width)*2.0f-1.0f;
-    float ny = 1.0f-(by/eng->height)*2.0f;
-    float ax = (as/eng->width)*2.0f;
-    float ay = (as/eng->height)*2.0f;
-    float arrow[] = { nx,ny+ay, nx-ax,ny-ay*0.5f, nx+ax,ny-ay*0.5f };
+    /* Прыжок — такой же размер как джойстик */
+    float bx = sw - JUMP_BTN_OFFSET;
+    float by = sh - JUMP_BTN_OFFSET;
+    draw_ring(bx, by, JUMP_BTN_SIZE, 3.0f, sw, sh, 0, 0, 0, 1.0f);
+    /* Стрелка вверх */
+    float as = JUMP_BTN_SIZE * 0.3f;
+    float anx = (bx / sw) * 2.0f - 1.0f;
+    float any = 1.0f - (by / sh) * 2.0f;
+    float aax = (as / sw) * 2.0f;
+    float aay = (as / sh) * 2.0f;
+    float arrow[] = {
+        anx, any + aay,
+        anx - aax, any - aay * 0.5f,
+        anx + aax, any - aay * 0.5f
+    };
     glUseProgram(uiProg);
-    glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1.0f);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 0, 0, 0, 1.0f);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, arrow);
     glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES,0,3);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 
-    /* Кнопка ломания — X */
-    float bbx = eng->width - BREAK_BTN_X;
+    /* Кнопка ломания — X (правый верх) */
+    float bbx = sw - BREAK_BTN_X;
     float bby = BREAK_BTN_Y;
-    draw_ring(bbx,bby,ACTION_BTN_SIZE,3.0f,eng->width,eng->height,0,0,0,1.0f);
-    float xs = ACTION_BTN_SIZE*0.25f;
-    float xnx = (bbx/eng->width)*2.0f-1.0f;
-    float xny = 1.0f-(bby/eng->height)*2.0f;
-    float xxs = (xs/eng->width)*2.0f;
-    float xys = (xs/eng->height)*2.0f;
-    float xtw = (2.0f/eng->width)*2.0f;
-    float xth = (2.0f/eng->height)*2.0f;
-    float xmark[] = {
-        xnx-xxs,xny-xys+xth, xnx-xxs+xtw,xny-xys,
-        xnx+xxs,xny+xys-xth, xnx-xxs,xny-xys+xth,
-        xnx+xxs,xny+xys-xth, xnx+xxs-xtw,xny+xys,
-        xnx+xxs,xny-xys+xth, xnx+xxs-xtw,xny-xys,
-        xnx-xxs,xny+xys-xth, xnx+xxs,xny-xys+xth,
-        xnx-xxs,xny+xys-xth, xnx-xxs+xtw,xny+xys
+    draw_ring(bbx, bby, ACTION_BTN_SIZE, 3.0f, sw, sh, 0, 0, 0, 1.0f);
+    /* Рисуем X двумя повёрнутыми прямоугольниками через треугольники */
+    float xsz = ACTION_BTN_SIZE * 0.3f;
+    float xw = 2.5f;
+    float xnx = (bbx / sw) * 2.0f - 1.0f;
+    float xny = 1.0f - (bby / sh) * 2.0f;
+    float xs1 = (xsz / sw) * 2.0f;
+    float ys1 = (xsz / sh) * 2.0f;
+    float xw1 = (xw / sw) * 2.0f;
+    float xw2 = (xw / sh) * 2.0f;
+    /* Диагональ \ */
+    float d1[] = {
+        xnx - xs1 - xw1, xny + ys1,
+        xnx - xs1 + xw1, xny + ys1,
+        xnx + xs1 + xw1, xny - ys1,
+        xnx - xs1 - xw1, xny + ys1,
+        xnx + xs1 + xw1, xny - ys1,
+        xnx + xs1 - xw1, xny - ys1
     };
-    glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1.0f);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,xmark);
+    /* Диагональ / */
+    float d2[] = {
+        xnx + xs1 - xw1, xny + ys1,
+        xnx + xs1 + xw1, xny + ys1,
+        xnx - xs1 + xw1, xny - ys1,
+        xnx + xs1 - xw1, xny + ys1,
+        xnx - xs1 + xw1, xny - ys1,
+        xnx - xs1 - xw1, xny - ys1
+    };
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 0, 0, 0, 1.0f);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, d1);
     glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES,0,12);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, d2);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    /* Кнопка ставления — + */
-    float pbx = eng->width - PLACE_BTN_X;
+    /* Кнопка ставления — + (правый верх, ниже) */
+    float pbx = sw - PLACE_BTN_X;
     float pby = PLACE_BTN_Y;
-    draw_ring(pbx,pby,ACTION_BTN_SIZE,3.0f,eng->width,eng->height,0,0,0,1.0f);
-    float ps = ACTION_BTN_SIZE*0.3f;
-    float pnx = (pbx/eng->width)*2.0f-1.0f;
-    float pny = 1.0f-(pby/eng->height)*2.0f;
-    float pxs = (ps/eng->width)*2.0f;
-    float pys = (ps/eng->height)*2.0f;
-    float ptw = (2.0f/eng->width)*2.0f;
-    float pth = (2.0f/eng->height)*2.0f;
-    float plus[] = {
-        pnx-pxs,pny-pth, pnx+pxs,pny-pth,
-        pnx+pxs,pny+pth, pnx-pxs,pny-pth,
-        pnx+pxs,pny+pth, pnx-pxs,pny+pth,
-        pnx-ptw,pny-pys, pnx+ptw,pny-pys,
-        pnx+ptw,pny+pys, pnx-ptw,pny-pys,
-        pnx+ptw,pny+pys, pnx-ptw,pny+pys
-    };
-    glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1.0f);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,plus);
-    glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES,0,12);
+    draw_ring(pbx, pby, ACTION_BTN_SIZE, 3.0f, sw, sh, 0, 0, 0, 1.0f);
+    /* Плюс из двух прямоугольников */
+    float psz = ACTION_BTN_SIZE * 0.3f;
+    float pw = 2.5f;
+    draw_rect(pbx, pby, psz, pw, sw, sh, 0, 0, 0, 1.0f);
+    draw_rect(pbx, pby, pw, psz, sw, sh, 0, 0, 0, 1.0f);
 
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
