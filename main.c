@@ -32,7 +32,8 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         eng->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
         eglInitialize(eng->display, 0, 0);
 
-        EGLConfig config; EGLint n;
+        EGLConfig config;
+        EGLint n;
         EGLint att[] = {
             EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
             EGL_DEPTH_SIZE, 16, EGL_NONE
@@ -41,10 +42,11 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         eng->surface = eglCreateWindowSurface(
             eng->display, config, eng->app->window, NULL);
         EGLint ctxAtt[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
-        eng->context = eglCreateContext(eng->display, config, NULL, ctxAtt);
-        eglMakeCurrent(eng->display, eng->surface, eng->surface, eng->context);
+        eng->context = eglCreateContext(
+            eng->display, config, NULL, ctxAtt);
+        eglMakeCurrent(eng->display, eng->surface,
+                       eng->surface, eng->context);
 
-        /* Шейдер с освещением + туман относительно камеры */
         const char* vS =
             "attribute vec3 pos;"
             "attribute vec2 uv;"
@@ -72,28 +74,26 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
             "  vec3 lightDir = normalize(vec3(0.4, 0.9, 0.3));"
             "  float diff = max(dot(vNorm, lightDir), 0.0);"
             "  float ambient = 0.45;"
-            "  float topBoost = 0.0;"
-            "  if(vNorm.y > 0.5) topBoost = 0.1;"
-            "  if(vNorm.y < -0.5) topBoost = -0.15;"
-            "  float sideShade = 0.0;"
-            "  if(abs(vNorm.x) > 0.5) sideShade = -0.05;"
-            "  if(abs(vNorm.z) > 0.5) sideShade = -0.1;"
-            "  float light = ambient + diff * 0.55 + topBoost + sideShade;"
-            "  light = clamp(light, 0.2, 1.0);"
-            /* Туман относительно камеры — фикс белизны */
+            "  float faceBias = 0.0;"
+            "  if(vNorm.y > 0.5) faceBias = 0.1;"
+            "  if(vNorm.y < -0.5) faceBias = -0.15;"
+            "  if(abs(vNorm.x) > 0.5) faceBias = -0.05;"
+            "  if(abs(vNorm.z) > 0.5) faceBias = -0.1;"
+            "  float light = clamp(ambient + diff * 0.55 + faceBias, 0.2, 1.0);"
             "  vec3 toFrag = vWorldPos - camPos;"
             "  float dist = length(toFrag.xz);"
             "  vec3 fogCol = vec3(0.53, 0.81, 0.98);"
             "  float fog = clamp((dist - 20.0) / 25.0, 0.0, 0.85);"
-            "  vec3 col = texCol.rgb * light;"
-            "  col = mix(col, fogCol, fog);"
+            "  vec3 col = mix(texCol.rgb * light, fogCol, fog);"
             "  gl_FragColor = vec4(col, 1.0);"
             "}";
 
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vs, 1, &vS, NULL); glCompileShader(vs);
+        glShaderSource(vs, 1, &vS, NULL);
+        glCompileShader(vs);
         GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fs, 1, &fS, NULL); glCompileShader(fs);
+        glShaderSource(fs, 1, &fS, NULL);
+        glCompileShader(fs);
         eng->program = glCreateProgram();
         glBindAttribLocation(eng->program, 0, "pos");
         glBindAttribLocation(eng->program, 1, "uv");
