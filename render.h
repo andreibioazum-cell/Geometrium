@@ -127,7 +127,7 @@ static void render_world(struct engine* eng) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-/* ============= UI — непрозрачный ============= */
+/* ============= UI ============= */
 
 static GLuint uiProg = 0;
 
@@ -202,41 +202,26 @@ static void draw_ui(struct engine* eng) {
     float jx = JOY_X_OFFSET;
     float jy = eng->height - JOY_Y_OFFSET;
 
-    /* Заливка джойстика — тёмно-серая непрозрачная */
-    draw_circle(jx, jy, JOY_RADIUS,
-                eng->width, eng->height,
-                0.15f, 0.15f, 0.15f, 1.0f);
-
-    /* Обводка джойстика — белая */
+    /* Джойстик — только чёрная обводка, без фона */
     draw_ring(jx, jy, JOY_RADIUS, 4.0f,
               eng->width, eng->height,
-              1.0f, 1.0f, 1.0f, 1.0f);
+              0, 0, 0, 1.0f);
 
-    /* Стик — светло-серый непрозрачный */
+    /* Стик — чёрный заполненный круг */
     float hx = jx + eng->moveDirX * JOY_RADIUS * 0.6f;
     float hy = jy + eng->moveDirZ * JOY_RADIUS * 0.6f;
     draw_circle(hx, hy, STICK_RADIUS,
                 eng->width, eng->height,
-                0.6f, 0.6f, 0.6f, 1.0f);
+                0, 0, 0, 1.0f);
 
-    /* Обводка стика */
-    draw_ring(hx, hy, STICK_RADIUS, 3.0f,
-              eng->width, eng->height,
-              1.0f, 1.0f, 1.0f, 1.0f);
-
-    /* Кнопка прыжка — заливка */
+    /* Кнопка прыжка — только чёрная обводка */
     float bx = eng->width - JUMP_BTN_OFFSET;
     float by = eng->height - JUMP_BTN_OFFSET;
-    draw_circle(bx, by, JUMP_BTN_SIZE,
-                eng->width, eng->height,
-                0.15f, 0.15f, 0.15f, 1.0f);
-
-    /* Обводка прыжка */
     draw_ring(bx, by, JUMP_BTN_SIZE, 4.0f,
               eng->width, eng->height,
-              1.0f, 1.0f, 1.0f, 1.0f);
+              0, 0, 0, 1.0f);
 
-    /* Стрелка вверх — белая */
+    /* Стрелка — чёрная */
     float as = JUMP_BTN_SIZE * 0.35f;
     float nx = (bx / eng->width) * 2.0f - 1.0f;
     float ny = 1.0f - (by / eng->height) * 2.0f;
@@ -249,7 +234,7 @@ static void draw_ui(struct engine* eng) {
     };
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg, "col"),
-                1.0f, 1.0f, 1.0f, 1.0f);
+                0, 0, 0, 1.0f);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, arrow);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
