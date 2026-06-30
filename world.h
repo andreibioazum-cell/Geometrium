@@ -1,4 +1,4 @@
-#ifndef WORLD_H
+ #ifndef WORLD_H
 #define WORLD_H
 
 #include <math.h>
@@ -21,7 +21,6 @@ static float smooth_noise(float fx, float fz) {
     int iz = (int)floorf(fz);
     float dx = fx - ix;
     float dz = fz - iz;
-    /* Плавная интерполяция */
     dx = dx * dx * (3.0f - 2.0f * dx);
     dz = dz * dz * (3.0f - 2.0f * dz);
     float v00 = noise2d(ix, iz);
@@ -49,17 +48,6 @@ static int get_height(int wx, int wz) {
     if (height < 2) height = 2;
     if (height >= CHUNK_H - 1) height = CHUNK_H - 2;
     return height;
-}
-
-/* Определить тип блока по высоте */
-static unsigned char get_block_type(int y, int surfaceY) {
-    if (y == surfaceY - 1) {
-        if (surfaceY > 20) return BLOCK_SNOW;
-        if (surfaceY > 14) return BLOCK_STONE;
-        return BLOCK_GRASS;
-    }
-    if (y >= surfaceY - 4) return BLOCK_DIRT;
-    return BLOCK_STONE;
 }
 
 static void pos_to_block(float rx, float ry, float rz,
@@ -102,8 +90,8 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
             int bz = dz + LOAD_RADIUS;
             int h = get_height(wx, wz);
             for (int y = 0; y < h; y++)
-                eng->blocks[bx][y][bz] = get_block_type(y, h);
-            eng->blocks[bx][0][bz] = BLOCK_STONE;
+                eng->blocks[bx][y][bz] = BLOCK_GRASS;
+            eng->blocks[bx][0][bz] = BLOCK_GRASS;
         }
 
     for (int i = 0; i < eng->editCount; i++) {
@@ -242,9 +230,7 @@ static void place_block(struct engine* eng) {
     bool oY = (headY > bRy-0.5f) && (footY < bRy+0.5f);
     if (oX && oY && oZ) return;
 
-    unsigned char blockType = eng->invSlots[eng->selectedSlot];
-    if (blockType == BLOCK_AIR) return;
-    world_set_block(eng, px, py, pz, blockType);
+    world_set_block(eng, px, py, pz, BLOCK_GRASS);
 }
 
 #endif
