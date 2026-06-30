@@ -41,18 +41,14 @@ static int get_height(int wx, int wz) {
 }
 
 /*
- * Координатная система:
- *
- * Мировые блоки: (wx, wy, wz) — целые числа
  * Блок (wx, wy, wz) рендерится с центром в (wx, wy, -wz)
- * Блок занимает пространство от (wx-0.5, wy-0.5, -wz-0.5) до (wx+0.5, wy+0.5, -wz+0.5)
+ * Камера находится в (camPos[0], camPos[1], camPos[2])
  *
- * Камера: camPos = (rx, ry, rz) где rz = -wz
- * Конвертация: wx = round(rx), wz = round(-rz)
- *   round(x) = floor(x + 0.5)
+ * Чтобы найти какой блок в точке рендера (rx, ry, rz):
+ *   wx = floor(rx + 0.5)
+ *   wy = floor(ry + 0.5)
+ *   wz = floor(-rz + 0.5)   потому что rz = -wz
  */
-
-/* Конвертация позиции камеры -> блок мира */
 static void pos_to_block(float rx, float ry, float rz,
                          int* wx, int* wy, int* wz) {
     *wx = (int)floorf(rx + 0.5f);
@@ -60,7 +56,6 @@ static void pos_to_block(float rx, float ry, float rz,
     *wz = (int)floorf(-rz + 0.5f);
 }
 
-/* Буферные координаты из мировых */
 static void world_to_buf(struct engine* eng, int wx, int wz,
                           int* bx, int* bz) {
     *bx = wx - eng->loadCenterX + LOAD_RADIUS;
@@ -81,7 +76,6 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
     return eng->blocks[bx][wy][bz];
 }
 
-/* Генерация + применение сохранённых изменений */
 static void load_blocks_around(struct engine* eng, int cx, int cz) {
     eng->loadCenterX = cx;
     eng->loadCenterZ = cz;
@@ -99,7 +93,6 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
             eng->blocks[bx][0][bz] = 1;
         }
 
-    /* Применить сохранённые изменения */
     for (int i = 0; i < eng->editCount; i++) {
         struct block_edit* e = &eng->edits[i];
         int bx, bz;
@@ -115,7 +108,6 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
     eng->meshDirty = true;
 }
 
-/* Записать изменение блока */
 static void world_set_block(struct engine* eng, int wx, int wy, int wz,
                              unsigned char val) {
     if (wy < 0 || wy >= CHUNK_H) return;
@@ -124,8 +116,6 @@ static void world_set_block(struct engine* eng, int wx, int wy, int wz,
     if (bx < 0 || bx >= WORLD_BUF || bz < 0 || bz >= WORLD_BUF) return;
     eng->blocks[bx][wy][bz] = val;
 
-    /* Сохранить изменение */
-    /* Ищем существующее для этой позиции */
     for (int i = 0; i < eng->editCount; i++) {
         if (eng->edits[i].wx == wx &&
             eng->edits[i].wy == wy &&
@@ -137,12 +127,8 @@ static void world_set_block(struct engine* eng, int wx, int wy, int wz,
     }
     if (eng->editCount < MAX_EDITS) {
         struct block_edit* e = &eng->edits[eng->editCount++];
-        e->wx = wx;
-        e->wy = wy;
-        e->wz = wz;
-        e->val = val;
+        e->wx = wx; e->wy = wy; e->wz = wz; e->val = val;
     }
-
     eng->meshDirty = true;
 }
 
@@ -178,25 +164,41 @@ static void update_world(struct engine* eng) {
         load_blocks_around(eng, px, pz);
 }
 
-/* Raycast */
+/*
+ * Raycast — луч из камеры в направлении взгляда
+ *
+ * Камера смотрит: yaw вращает вокруг Y, pitch вокруг X
+ * В нашей view матрице:
+ *   yaw=0 -> смотрим в -Z рендера (т.е. в +wz)
+ *   yaw=PI/2 -> смотрим в -X рендера
+ *
+ * Направление в пространстве рендера:
+ *   dirX = -sin(yaw) * cos(pitch)
+ *   dirY = -sin(pitch)
+ *   dirZ = -cos(yaw) * cos(pitch)   <-- БЫЛ БАГ: было +cos
+ *
+ * Луч идёт в пространстве рендера, pos_to_block конвертирует в блоки
+ */
 static bool raycast(struct engine* eng,
                     int* hitX, int* hitY, int* hitZ,
                     int* prevX, int* prevY, int* prevZ) {
     float pitch = eng->camRot[0];
     float yaw = eng->camRot[1];
-    float dirX = -sinf(yaw) * cosf(pitch);
+
+    float cp = cosf(pitch);
+    float dirX = -sinf(yaw) * cp;
     float dirY = -sinf(pitch);
-    float dirZ = cosf(yaw) * cosf(pitch);
+    float dirZ = -cosf(yaw) * cp;
 
     int lx = -9999, ly = -9999, lz = -9999;
 
     for (float t = 0.0f; t < RAY_DIST; t += RAY_STEP) {
-        float px = eng->camPos[0] + dirX * t;
-        float py = eng->camPos[1] + dirY * t;
-        float pz = eng->camPos[2] + dirZ * t;
+        float rx = eng->camPos[0] + dirX * t;
+        float ry = eng->camPos[1] + dirY * t;
+        float rz = eng->camPos[2] + dirZ * t;
 
         int wx, wy, wz;
-        pos_to_block(px, py, pz, &wx, &wy, &wz);
+        pos_to_block(rx, ry, rz, &wx, &wy, &wz);
 
         if (wx == lx && wy == ly && wz == lz) continue;
 
@@ -224,10 +226,7 @@ static void place_block(struct engine* eng) {
     if (px == -9999) return;
     if (py < 0 || py >= CHUNK_H) return;
 
-    /* Проверка — не ставить внутри игрока
-     * Блок (px,py,pz) будет иметь центр рендера (px, py, -pz)
-     * и занимает куб от (px-0.5, py-0.5, -pz-0.5) до (px+0.5, py+0.5, -pz+0.5)
-     */
+    /* Блок (px,py,pz) рендерится с центром (px, py, -pz) */
     float bRx = (float)px;
     float bRy = (float)py;
     float bRz = -(float)pz;
