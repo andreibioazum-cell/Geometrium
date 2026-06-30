@@ -12,7 +12,7 @@
 static void engine_draw_frame(struct engine* eng) {
     if (!eng->display) return;
 
-    update_chunks(eng);
+    update_world(eng);
     apply_physics(eng);
 
     eglQuerySurface(eng->display, eng->surface, EGL_WIDTH, &eng->width);
@@ -50,14 +50,17 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         eglMakeCurrent(eng->display, eng->surface,
                        eng->surface, eng->context);
 
+        /* Шейдер мира — с текстурой */
         const char* vS =
             "attribute vec4 p; attribute vec2 t;"
             "varying vec2 vT; uniform mat4 m;"
             "void main(){ gl_Position=m*p; vT=t; }";
         const char* fS =
-            "precision mediump float; varying vec2 vT;"
+            "precision mediump float;"
+            "varying vec2 vT;"
+            "uniform sampler2D tex;"
             "void main(){"
-            "  gl_FragColor=vec4(vT.x, vT.y+0.3, 0.4, 1.0);"
+            "  gl_FragColor = texture2D(tex, vT);"
             "}";
 
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
@@ -73,6 +76,9 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         glDeleteShader(vs);
         glDeleteShader(fs);
 
+        /* Загрузка текстуры травы */
+        eng->texture = load_texture(eng->app, "grass.png");
+
         init_ui_shader();
     }
 }
@@ -81,16 +87,9 @@ void android_main(struct android_app* state) {
     struct engine eng = {0};
     eng.movePointerId = -1;
     eng.lookPointerId = -1;
-    eng.chunksReady = false;
-    eng.lastChunkX = 99999;
-    eng.lastChunkZ = 99999;
+    eng.worldLoaded = false;
+    eng.meshDirty = true;
 
-    for (int i = 0; i < MAX_CHUNKS; i++) {
-        eng.chunks[i].active = false;
-        eng.chunks[i].vbo = 0;
-    }
-
-    /* Спавн в центре мира (0,0) */
     eng.camPos[0] = 0.5f;
     eng.camPos[2] = -0.5f;
     eng.camPos[1] = (float)get_height(0, 0) + 2.5f;
