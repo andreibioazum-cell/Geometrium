@@ -30,7 +30,7 @@ static int32_t engine_handle_input(struct android_app* app,
         float jbY = eng->height - JUMP_BTN_OFFSET;
         float djx = x - jbX, djy = y - jbY;
 
-        if (sqrtf(djx * djx + djy * djy) < JUMP_BTN_SIZE * 1.3f) {
+        if (sqrtf(djx*djx + djy*djy) < JUMP_BTN_SIZE * 1.3f) {
             if (eng->onGround) {
                 eng->velY = JUMP_FORCE;
                 eng->onGround = false;
@@ -61,11 +61,11 @@ static int32_t engine_handle_input(struct android_app* app,
 
             if (id == eng->movePointerId && eng->isMoving) {
                 float dx = x - eng->joyX, dy = y - eng->joyY;
-                float d = sqrtf(dx * dx + dy * dy);
+                float d = sqrtf(dx*dx + dy*dy);
                 if (d > 10.0f) {
                     float clamp = d > JOY_RADIUS ? JOY_RADIUS : d;
-                    eng->moveDirX = (dx / d) * (clamp / JOY_RADIUS);
-                    eng->moveDirZ = (dy / d) * (clamp / JOY_RADIUS);
+                    eng->moveDirX = (dx/d) * (clamp/JOY_RADIUS);
+                    eng->moveDirZ = (dy/d) * (clamp/JOY_RADIUS);
                 } else {
                     eng->moveDirX = 0;
                     eng->moveDirZ = 0;
