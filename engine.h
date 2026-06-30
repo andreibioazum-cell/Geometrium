@@ -26,6 +26,29 @@
 #define JUMP_FORCE      0.12f
 #define TERM_VEL       -0.25f
 
+/* Чанки */
+#define CHUNK_SIZE      16
+#define CHUNK_H         10
+#define VIEW_DIST       3
+#define MAX_CHUNKS      ((VIEW_DIST * 2 + 1) * (VIEW_DIST * 2 + 1))
+
+#define FACE_XP 0x01
+#define FACE_XN 0x02
+#define FACE_YP 0x04
+#define FACE_YN 0x08
+#define FACE_ZP 0x10
+#define FACE_ZN 0x20
+
+struct chunk {
+    int cx, cz;                /* координаты чанка в чанковом пространстве */
+    unsigned char blocks[CHUNK_SIZE][CHUNK_H][CHUNK_SIZE];
+    unsigned char faces[CHUNK_SIZE][CHUNK_H][CHUNK_SIZE];
+    GLuint vbo;
+    int faceCount;
+    bool active;
+    bool meshDirty;
+};
+
 struct engine {
     struct android_app* app;
     EGLDisplay display;
@@ -47,8 +70,9 @@ struct engine {
     int lookPointerId;
     bool onGround;
 
-    GLuint vbo;
-    int visibleFaceCount;
+    struct chunk chunks[MAX_CHUNKS];
+    int lastChunkX, lastChunkZ;
+    bool chunksReady;
 };
 
 #endif
