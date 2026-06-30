@@ -13,14 +13,12 @@ static void push_quad(float* buf, int* idx,
                       float x1, float y1, float z1, float u1, float v1,
                       float x2, float y2, float z2, float u2, float v2,
                       float x3, float y3, float z3, float u3, float v3) {
-    /* Треугольник 1: 0-1-2 */
     buf[(*idx)++] = x0; buf[(*idx)++] = y0; buf[(*idx)++] = z0;
     buf[(*idx)++] = u0; buf[(*idx)++] = v0;
     buf[(*idx)++] = x1; buf[(*idx)++] = y1; buf[(*idx)++] = z1;
     buf[(*idx)++] = u1; buf[(*idx)++] = v1;
     buf[(*idx)++] = x2; buf[(*idx)++] = y2; buf[(*idx)++] = z2;
     buf[(*idx)++] = u2; buf[(*idx)++] = v2;
-    /* Треугольник 2: 0-2-3 */
     buf[(*idx)++] = x0; buf[(*idx)++] = y0; buf[(*idx)++] = z0;
     buf[(*idx)++] = u0; buf[(*idx)++] = v0;
     buf[(*idx)++] = x2; buf[(*idx)++] = y2; buf[(*idx)++] = z2;
@@ -45,16 +43,6 @@ static int count_faces(void) {
     return c;
 }
 
-/*
- * Координаты мира:
- *   блок map[x][y][z] рисуется в позиции (x, y, -z)
- *
- * map z+ = мир z- (вглубь экрана)
- * map z- = мир z+ (на камеру)
- *
- * FACE_ZP = сосед map z+1 пуст = грань смотрит в мир z- = bz - 0.5
- * FACE_ZN = сосед map z-1 пуст = грань смотрит в мир z+ = bz + 0.5
- */
 static void rebuild_world_vbo(struct engine* eng) {
     int faceCount = count_faces();
     eng->visibleFaceCount = faceCount;
@@ -79,54 +67,30 @@ static void rebuild_world_vbo(struct engine* eng) {
                 float y0 = by - 0.5f, y1 = by + 0.5f;
                 float z0 = bz - 0.5f, z1 = bz + 0.5f;
 
-                /* x+ грань */
-                if (f & FACE_XP) {
+                if (f & FACE_XP)
                     push_quad(buf, &idx,
-                        x1,y0,z0, 0,0,
-                        x1,y0,z1, 1,0,
-                        x1,y1,z1, 1,1,
-                        x1,y1,z0, 0,1);
-                }
-                /* x- грань */
-                if (f & FACE_XN) {
+                        x1,y0,z0, 0,0, x1,y0,z1, 1,0,
+                        x1,y1,z1, 1,1, x1,y1,z0, 0,1);
+                if (f & FACE_XN)
                     push_quad(buf, &idx,
-                        x0,y0,z1, 0,0,
-                        x0,y0,z0, 1,0,
-                        x0,y1,z0, 1,1,
-                        x0,y1,z1, 0,1);
-                }
-                /* y+ грань */
-                if (f & FACE_YP) {
+                        x0,y0,z1, 0,0, x0,y0,z0, 1,0,
+                        x0,y1,z0, 1,1, x0,y1,z1, 0,1);
+                if (f & FACE_YP)
                     push_quad(buf, &idx,
-                        x0,y1,z1, 0,0,
-                        x1,y1,z1, 1,0,
-                        x1,y1,z0, 1,1,
-                        x0,y1,z0, 0,1);
-                }
-                /* y- грань */
-                if (f & FACE_YN) {
+                        x0,y1,z1, 0,0, x1,y1,z1, 1,0,
+                        x1,y1,z0, 1,1, x0,y1,z0, 0,1);
+                if (f & FACE_YN)
                     push_quad(buf, &idx,
-                        x0,y0,z0, 0,0,
-                        x1,y0,z0, 1,0,
-                        x1,y0,z1, 1,1,
-                        x0,y0,z1, 0,1);
-                }
-                /* FACE_ZP: сосед z+1 пуст, грань на стороне bz-0.5 */
-                if (f & FACE_ZP) {
+                        x0,y0,z0, 0,0, x1,y0,z0, 1,0,
+                        x1,y0,z1, 1,1, x0,y0,z1, 0,1);
+                if (f & FACE_ZP)
                     push_quad(buf, &idx,
-                        x1,y0,z0, 0,0,
-                        x0,y0,z0, 1,0,
-                        x0,y1,z0, 1,1,
-                        x1,y1,z0, 0,1);
-                }
-                /* FACE_ZN: сосед z-1 пуст, грань на стороне bz+0.5 */
-                if (f & FACE_ZN) {
+                        x1,y0,z0, 0,0, x0,y0,z0, 1,0,
+                        x0,y1,z0, 1,1, x1,y1,z0, 0,1);
+                if (f & FACE_ZN)
                     push_quad(buf, &idx,
-                        x0,y0,z1, 0,0,
-                        x1,y0,z1, 1,0,
-                        x1,y1,z1, 1,1,
-                        x0,y1,z1, 0,1);
-                }
+                        x0,y0,z1, 0,0, x1,y0,z1, 1,0,
+                        x1,y1,z1, 1,1, x0,y1,z1, 0,1);
             }
         }
     }
@@ -163,7 +127,7 @@ static void render_world(struct engine* eng) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-// ============= UI =============
+/* ============= UI — непрозрачный ============= */
 
 static GLuint uiProg = 0;
 
@@ -237,27 +201,55 @@ static void draw_ui(struct engine* eng) {
 
     float jx = JOY_X_OFFSET;
     float jy = eng->height - JOY_Y_OFFSET;
-    draw_ring(jx, jy, JOY_RADIUS, 3.0f,
-              eng->width, eng->height, 0, 0, 0, 0.8f);
 
-    float hx = jx + eng->moveDirX * JOY_RADIUS * 0.7f;
-    float hy = jy + eng->moveDirZ * JOY_RADIUS * 0.7f;
+    /* Заливка джойстика — тёмно-серая непрозрачная */
+    draw_circle(jx, jy, JOY_RADIUS,
+                eng->width, eng->height,
+                0.15f, 0.15f, 0.15f, 1.0f);
+
+    /* Обводка джойстика — белая */
+    draw_ring(jx, jy, JOY_RADIUS, 4.0f,
+              eng->width, eng->height,
+              1.0f, 1.0f, 1.0f, 1.0f);
+
+    /* Стик — светло-серый непрозрачный */
+    float hx = jx + eng->moveDirX * JOY_RADIUS * 0.6f;
+    float hy = jy + eng->moveDirZ * JOY_RADIUS * 0.6f;
     draw_circle(hx, hy, STICK_RADIUS,
-                eng->width, eng->height, 0, 0, 0, 0.7f);
+                eng->width, eng->height,
+                0.6f, 0.6f, 0.6f, 1.0f);
 
+    /* Обводка стика */
+    draw_ring(hx, hy, STICK_RADIUS, 3.0f,
+              eng->width, eng->height,
+              1.0f, 1.0f, 1.0f, 1.0f);
+
+    /* Кнопка прыжка — заливка */
     float bx = eng->width - JUMP_BTN_OFFSET;
     float by = eng->height - JUMP_BTN_OFFSET;
-    draw_ring(bx, by, JUMP_BTN_SIZE, 3.0f,
-              eng->width, eng->height, 0, 0, 0, 0.8f);
+    draw_circle(bx, by, JUMP_BTN_SIZE,
+                eng->width, eng->height,
+                0.15f, 0.15f, 0.15f, 1.0f);
 
-    float as = JUMP_BTN_SIZE * 0.4f;
+    /* Обводка прыжка */
+    draw_ring(bx, by, JUMP_BTN_SIZE, 4.0f,
+              eng->width, eng->height,
+              1.0f, 1.0f, 1.0f, 1.0f);
+
+    /* Стрелка вверх — белая */
+    float as = JUMP_BTN_SIZE * 0.35f;
     float nx = (bx / eng->width) * 2.0f - 1.0f;
     float ny = 1.0f - (by / eng->height) * 2.0f;
     float ax = (as / eng->width) * 2.0f;
     float ay = (as / eng->height) * 2.0f;
-    float arrow[] = { nx, ny + ay, nx - ax, ny - ay * 0.5f, nx + ax, ny - ay * 0.5f };
+    float arrow[] = {
+        nx,       ny + ay,
+        nx - ax,  ny - ay * 0.5f,
+        nx + ax,  ny - ay * 0.5f
+    };
     glUseProgram(uiProg);
-    glUniform4f(glGetUniformLocation(uiProg, "col"), 0, 0, 0, 0.7f);
+    glUniform4f(glGetUniformLocation(uiProg, "col"),
+                1.0f, 1.0f, 1.0f, 1.0f);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, arrow);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
