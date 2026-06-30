@@ -6,9 +6,10 @@
 #include "engine.h"
 #include "world.h"
 
-static bool is_solid(struct engine* eng, float x, float y, float z) {
+/* Проверка твёрдого блока в позиции рендера */
+static bool is_solid(struct engine* eng, float rx, float ry, float rz) {
     int wx, wy, wz;
-    cam_to_world_block(x, y, z, &wx, &wy, &wz);
+    pos_to_block(rx, ry, rz, &wx, &wy, &wz);
     return world_block_at(eng, wx, wy, wz) > 0;
 }
 
