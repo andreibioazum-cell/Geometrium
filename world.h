@@ -40,10 +40,53 @@ static int get_height(int wx, int wz) {
     return height;
 }
 
+/*
+ * Координатная система:
+ *
+ * Мировые блоки: (wx, wy, wz) — целые числа
+ * Блок (wx, wy, wz) рендерится с центром в (wx, wy, -wz)
+ * Блок занимает пространство от (wx-0.5, wy-0.5, -wz-0.5) до (wx+0.5, wy+0.5, -wz+0.5)
+ *
+ * Камера: camPos = (rx, ry, rz) где rz = -wz
+ * Конвертация: wx = round(rx), wz = round(-rz)
+ *   round(x) = floor(x + 0.5)
+ */
+
+/* Конвертация позиции камеры -> блок мира */
+static void pos_to_block(float rx, float ry, float rz,
+                         int* wx, int* wy, int* wz) {
+    *wx = (int)floorf(rx + 0.5f);
+    *wy = (int)floorf(ry + 0.5f);
+    *wz = (int)floorf(-rz + 0.5f);
+}
+
+/* Буферные координаты из мировых */
+static void world_to_buf(struct engine* eng, int wx, int wz,
+                          int* bx, int* bz) {
+    *bx = wx - eng->loadCenterX + LOAD_RADIUS;
+    *bz = wz - eng->loadCenterZ + LOAD_RADIUS;
+}
+
+static int buf_block(struct engine* eng, int bx, int by, int bz) {
+    if (by < 0 || by >= CHUNK_H) return 0;
+    if (bx < 0 || bx >= WORLD_BUF || bz < 0 || bz >= WORLD_BUF) return 0;
+    return eng->blocks[bx][by][bz];
+}
+
+static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
+    if (wy < 0 || wy >= CHUNK_H) return 0;
+    int bx, bz;
+    world_to_buf(eng, wx, wz, &bx, &bz);
+    if (bx < 0 || bx >= WORLD_BUF || bz < 0 || bz >= WORLD_BUF) return 0;
+    return eng->blocks[bx][wy][bz];
+}
+
+/* Генерация + применение сохранённых изменений */
 static void load_blocks_around(struct engine* eng, int cx, int cz) {
     eng->loadCenterX = cx;
     eng->loadCenterZ = cz;
     memset(eng->blocks, 0, sizeof(eng->blocks));
+
     for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
             int wx = cx + dx;
@@ -55,36 +98,51 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
                 eng->blocks[bx][y][bz] = (y < h) ? 1 : 0;
             eng->blocks[bx][0][bz] = 1;
         }
+
+    /* Применить сохранённые изменения */
+    for (int i = 0; i < eng->editCount; i++) {
+        struct block_edit* e = &eng->edits[i];
+        int bx, bz;
+        world_to_buf(eng, e->wx, e->wz, &bx, &bz);
+        if (bx >= 0 && bx < WORLD_BUF &&
+            bz >= 0 && bz < WORLD_BUF &&
+            e->wy >= 0 && e->wy < CHUNK_H) {
+            eng->blocks[bx][e->wy][bz] = e->val;
+        }
+    }
+
     eng->worldLoaded = true;
     eng->meshDirty = true;
 }
 
-static int buf_block(struct engine* eng, int bx, int by, int bz) {
-    if (by < 0 || by >= CHUNK_H) return 0;
-    if (bx < 0 || bx >= WORLD_BUF || bz < 0 || bz >= WORLD_BUF) return 0;
-    return eng->blocks[bx][by][bz];
-}
-
-static void world_to_buf(struct engine* eng, int wx, int wy, int wz,
-                          int* bx, int* by, int* bz) {
-    *bx = wx - eng->loadCenterX + LOAD_RADIUS;
-    *by = wy;
-    *bz = wz - eng->loadCenterZ + LOAD_RADIUS;
-}
-
-static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
-    int bx, by, bz;
-    world_to_buf(eng, wx, wy, wz, &bx, &by, &bz);
-    return buf_block(eng, bx, by, bz);
-}
-
+/* Записать изменение блока */
 static void world_set_block(struct engine* eng, int wx, int wy, int wz,
                              unsigned char val) {
-    int bx, by, bz;
-    world_to_buf(eng, wx, wy, wz, &bx, &by, &bz);
-    if (by < 0 || by >= CHUNK_H) return;
+    if (wy < 0 || wy >= CHUNK_H) return;
+    int bx, bz;
+    world_to_buf(eng, wx, wz, &bx, &bz);
     if (bx < 0 || bx >= WORLD_BUF || bz < 0 || bz >= WORLD_BUF) return;
-    eng->blocks[bx][by][bz] = val;
+    eng->blocks[bx][wy][bz] = val;
+
+    /* Сохранить изменение */
+    /* Ищем существующее для этой позиции */
+    for (int i = 0; i < eng->editCount; i++) {
+        if (eng->edits[i].wx == wx &&
+            eng->edits[i].wy == wy &&
+            eng->edits[i].wz == wz) {
+            eng->edits[i].val = val;
+            eng->meshDirty = true;
+            return;
+        }
+    }
+    if (eng->editCount < MAX_EDITS) {
+        struct block_edit* e = &eng->edits[eng->editCount++];
+        e->wx = wx;
+        e->wy = wy;
+        e->wz = wz;
+        e->val = val;
+    }
+
     eng->meshDirty = true;
 }
 
@@ -120,27 +178,12 @@ static void update_world(struct engine* eng) {
         load_blocks_around(eng, px, pz);
 }
 
-/*
- * Конвертация позиции в мире (float) -> координаты блока (int)
- * Камера: x = мировой x, z = -мировой_wz
- * Блок (wx, wy, wz): рендерится в (wx, wy, -wz)
- * Значит: wx = floor(camX), wz = floor(-camZ)
- */
-static void cam_to_world_block(float cx, float cy, float cz,
-                                int* wx, int* wy, int* wz) {
-    *wx = (int)floorf(cx);
-    *wy = (int)floorf(cy);
-    *wz = (int)floorf(-cz);
-}
-
-/* Raycast из камеры */
+/* Raycast */
 static bool raycast(struct engine* eng,
                     int* hitX, int* hitY, int* hitZ,
                     int* prevX, int* prevY, int* prevZ) {
     float pitch = eng->camRot[0];
     float yaw = eng->camRot[1];
-
-    /* Направление взгляда */
     float dirX = -sinf(yaw) * cosf(pitch);
     float dirY = -sinf(pitch);
     float dirZ = cosf(yaw) * cosf(pitch);
@@ -153,24 +196,16 @@ static bool raycast(struct engine* eng,
         float pz = eng->camPos[2] + dirZ * t;
 
         int wx, wy, wz;
-        cam_to_world_block(px, py, pz, &wx, &wy, &wz);
+        pos_to_block(px, py, pz, &wx, &wy, &wz);
 
-        if (wx == lx && wy == ly && wz == lz)
-            continue;
+        if (wx == lx && wy == ly && wz == lz) continue;
 
         if (world_block_at(eng, wx, wy, wz) > 0) {
-            *hitX = wx;
-            *hitY = wy;
-            *hitZ = wz;
-            *prevX = lx;
-            *prevY = ly;
-            *prevZ = lz;
+            *hitX = wx; *hitY = wy; *hitZ = wz;
+            *prevX = lx; *prevY = ly; *prevZ = lz;
             return true;
         }
-
-        lx = wx;
-        ly = wy;
-        lz = wz;
+        lx = wx; ly = wy; lz = wz;
     }
     return false;
 }
@@ -178,7 +213,6 @@ static bool raycast(struct engine* eng,
 static void break_block(struct engine* eng) {
     int hx, hy, hz, px, py, pz;
     if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
-        /* Не ломаем самый нижний слой */
         if (hy <= 0) return;
         world_set_block(eng, hx, hy, hz, 0);
     }
@@ -186,30 +220,28 @@ static void break_block(struct engine* eng) {
 
 static void place_block(struct engine* eng) {
     int hx, hy, hz, px, py, pz;
-    if (!raycast(eng, &hx, &hy, &hz, &px, &py, &pz))
-        return;
-
-    /* prevX/Y/Z — пустой блок рядом с hit */
+    if (!raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) return;
     if (px == -9999) return;
     if (py < 0 || py >= CHUNK_H) return;
 
-    /* Проверка что не ставим внутри игрока */
-    /* Позиция блока в мире рендера: (px, py, -pz) */
-    float blockRenderX = (float)px + 0.5f;
-    float blockRenderY = (float)py + 0.5f;
-    float blockRenderZ = -(float)pz - 0.5f;
+    /* Проверка — не ставить внутри игрока
+     * Блок (px,py,pz) будет иметь центр рендера (px, py, -pz)
+     * и занимает куб от (px-0.5, py-0.5, -pz-0.5) до (px+0.5, py+0.5, -pz+0.5)
+     */
+    float bRx = (float)px;
+    float bRy = (float)py;
+    float bRz = -(float)pz;
 
     float footY = eng->camPos[1] - EYE_H;
     float headY = eng->camPos[1] + HEAD_MARGIN;
 
-    /* AABB пересечение */
-    bool overlapX = fabsf(eng->camPos[0] - blockRenderX) < (PLAYER_W + 0.5f);
-    bool overlapZ = fabsf(eng->camPos[2] - blockRenderZ) < (PLAYER_W + 0.5f);
-    bool overlapY = (blockRenderY + 0.5f > footY) &&
-                    (blockRenderY - 0.5f < headY);
+    bool overlapX = (eng->camPos[0] + PLAYER_W > bRx - 0.5f) &&
+                    (eng->camPos[0] - PLAYER_W < bRx + 0.5f);
+    bool overlapZ = (eng->camPos[2] + PLAYER_W > bRz - 0.5f) &&
+                    (eng->camPos[2] - PLAYER_W < bRz + 0.5f);
+    bool overlapY = (headY > bRy - 0.5f) && (footY < bRy + 0.5f);
 
-    if (overlapX && overlapY && overlapZ)
-        return;
+    if (overlapX && overlapY && overlapZ) return;
 
     world_set_block(eng, px, py, pz, 1);
 }
