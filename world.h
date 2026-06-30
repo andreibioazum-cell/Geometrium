@@ -41,22 +41,20 @@ static int get_height(int wx, int wz) {
 }
 
 /*
- * Система координат:
- * Рендер: блок (wx,wy,wz) рисуется в центре (wx, wy, -wz)
- * Камера: camPos в координатах рендера
- * 
+ * Блок (wx, wy, wz) рендерится с центром в (wx, wy, -wz)
+ * Камера находится в координатах рендера (camPos)
+ *
  * render_x = world_x
- * render_y = world_y  
+ * render_y = world_y
  * render_z = -world_z
- * 
- * world_x = render_x
- * world_y = render_y
- * world_z = -render_z
+ *
+ * Из координат рендера в мировой блок:
+ *   wx = floor(rx + 0.5)
+ *   wy = floor(ry + 0.5)
+ *   wz = floor(-rz + 0.5)
  */
-
-/* Из координат рендера в мировой блок */
-static void render_to_world(float rx, float ry, float rz,
-                            int* wx, int* wy, int* wz) {
+static void pos_to_block(float rx, float ry, float rz,
+                         int* wx, int* wy, int* wz) {
     *wx = (int)floorf(rx + 0.5f);
     *wy = (int)floorf(ry + 0.5f);
     *wz = (int)floorf(-rz + 0.5f);
@@ -171,18 +169,14 @@ static void update_world(struct engine* eng) {
 }
 
 /*
- * Получить направление взгляда камеры в координатах рендера.
+ * Направление взгляда камеры в координатах рендера.
  *
- * mat4_lookat делает: rotX(pitch) * rotY(yaw) * translate(-pos)
+ * mat4_lookat: rotX(pitch) * rotY(yaw) * translate(-pos)
+ * При yaw=0, pitch=0 камера смотрит в (0, 0, -1)
  *
- * Камера при yaw=0, pitch=0 смотрит в направление (0, 0, -1) в рендере.
- * После rotY(yaw): направление = (-sin(yaw), 0, -cos(yaw))
- * После rotX(pitch): Y наклоняется.
- *
- * Итого направление взгляда в координатах рендера:
- *   forward.x = -sin(yaw) * cos(pitch)
- *   forward.y = -sin(pitch)
- *   forward.z = -cos(yaw) * cos(pitch)
+ * forward.x = -sin(yaw) * cos(pitch)
+ * forward.y = -sin(pitch)
+ * forward.z = -cos(yaw) * cos(pitch)
  */
 static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {
     float cp = cosf(eng->camRot[0]);
@@ -196,8 +190,7 @@ static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {
 
 /*
  * Raycast в координатах рендера.
- * Шагаем по лучу, конвертируем каждую точку в мировой блок.
- * Возвращаем hit (блок который нашли) и prev (предыдущий пустой блок).
+ * Возвращает hit (блок который нашли) и prev (предыдущий пустой).
  * Все координаты в мировой системе (wx, wy, wz).
  */
 static bool raycast(struct engine* eng,
@@ -206,8 +199,7 @@ static bool raycast(struct engine* eng,
     float dx, dy, dz;
     get_look_dir(eng, &dx, &dy, &dz);
 
-    /* Нормализуем на всякий случай */
-    float len = sqrtf(dx*dx + dy*dy + dz*dz);
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
     if (len < 0.001f) return false;
     dx /= len; dy /= len; dz /= len;
 
@@ -219,9 +211,8 @@ static bool raycast(struct engine* eng,
         float rz = eng->camPos[2] + dz * t;
 
         int wx, wy, wz;
-        render_to_world(rx, ry, rz, &wx, &wy, &wz);
+        pos_to_block(rx, ry, rz, &wx, &wy, &wz);
 
-        /* Пропускаем если тот же блок */
         if (wx == lx && wy == ly && wz == lz) continue;
 
         if (world_block_at(eng, wx, wy, wz) > 0) {
@@ -248,10 +239,6 @@ static void place_block(struct engine* eng) {
     if (px == -9999) return;
     if (py < 0 || py >= CHUNK_H) return;
 
-    /* Проверка — не ставить внутри игрока.
-     * Блок (px,py,pz) рендерится с центром (px, py, -pz).
-     * Куб от (px-0.5, py-0.5, -pz-0.5) до (px+0.5, py+0.5, -pz+0.5)
-     */
     float bRx = (float)px;
     float bRy = (float)py;
     float bRz = -(float)pz;
