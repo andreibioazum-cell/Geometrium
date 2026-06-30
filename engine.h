@@ -44,7 +44,6 @@
 
 #define RAY_DIST        6.0f
 #define RAY_STEP        0.02f
-
 #define MAX_EDITS       512
 
 #define BLOCK_AIR       0
@@ -55,8 +54,8 @@
 #define INV_PADDING     4.0f
 #define INV_Y_OFFSET    50.0f
 
-#define ANIM_BREAK_TIME 10
-#define ANIM_PLACE_TIME 8
+#define ANIM_PLACE_FRAMES 8
+#define ANIM_BREAK_FRAMES 8
 
 struct block_edit {
     int wx, wy, wz;
@@ -70,6 +69,7 @@ struct engine {
     EGLContext context;
     int32_t width, height;
     GLuint program;
+    GLuint invProgram;
     GLuint texGrassTop;
     GLuint texGrassSide;
     GLuint texGrassDown;
@@ -103,15 +103,12 @@ struct engine {
     unsigned char invSlots[INV_SLOTS];
     int selectedSlot;
 
-    int animBreakTimer;
-    int animPlaceTimer;
-    float animHandAngle;
-
     /* Анимация блока в мире */
-    bool animBlockActive;
+    int animPlaceTimer;
+    int animBreakTimer;
     float animBlockX, animBlockY, animBlockZ;
-    float animBlockScale;
-    bool animBlockBreaking; /* true=ломание, false=ставка */
+    bool animActive;
+    bool animIsBreak;
 };
 
 #endif
