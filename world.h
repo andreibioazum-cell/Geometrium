@@ -21,6 +21,9 @@ static float smooth_noise(float fx, float fz) {
     int iz = (int)floorf(fz);
     float dx = fx - ix;
     float dz = fz - iz;
+    /* Плавная интерполяция */
+    dx = dx * dx * (3.0f - 2.0f * dx);
+    dz = dz * dz * (3.0f - 2.0f * dz);
     float v00 = noise2d(ix, iz);
     float v10 = noise2d(ix + 1, iz);
     float v01 = noise2d(ix, iz + 1);
@@ -30,15 +33,33 @@ static float smooth_noise(float fx, float fz) {
     return i0 + (i1 - i0) * dz;
 }
 
+static float fbm_noise(float x, float z) {
+    float val = 0;
+    val += smooth_noise(x * 0.015f, z * 0.015f) * 16.0f;
+    val += smooth_noise(x * 0.03f,  z * 0.03f)  * 8.0f;
+    val += smooth_noise(x * 0.06f,  z * 0.06f)  * 4.0f;
+    val += smooth_noise(x * 0.12f,  z * 0.12f)  * 2.0f;
+    val += smooth_noise(x * 0.25f,  z * 0.25f)  * 1.0f;
+    return val;
+}
+
 static int get_height(int wx, int wz) {
-    float h = 0;
-    h += smooth_noise(wx * 0.05f, wz * 0.05f) * 4.0f;
-    h += smooth_noise(wx * 0.1f, wz * 0.1f) * 2.0f;
-    h += smooth_noise(wx * 0.2f, wz * 0.2f) * 1.0f;
-    int height = (int)(h) + 3;
-    if (height < 1) height = 1;
-    if (height >= CHUNK_H) height = CHUNK_H - 1;
+    float h = fbm_noise((float)wx, (float)wz);
+    int height = (int)(h) + 8;
+    if (height < 2) height = 2;
+    if (height >= CHUNK_H - 1) height = CHUNK_H - 2;
     return height;
+}
+
+/* Определить тип блока по высоте */
+static unsigned char get_block_type(int y, int surfaceY) {
+    if (y == surfaceY - 1) {
+        if (surfaceY > 20) return BLOCK_SNOW;
+        if (surfaceY > 14) return BLOCK_STONE;
+        return BLOCK_GRASS;
+    }
+    if (y >= surfaceY - 4) return BLOCK_DIRT;
+    return BLOCK_STONE;
 }
 
 static void pos_to_block(float rx, float ry, float rz,
@@ -80,9 +101,9 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
             int bx = dx + LOAD_RADIUS;
             int bz = dz + LOAD_RADIUS;
             int h = get_height(wx, wz);
-            for (int y = 0; y < CHUNK_H; y++)
-                eng->blocks[bx][y][bz] = (y < h) ? 1 : 0;
-            eng->blocks[bx][0][bz] = 1;
+            for (int y = 0; y < h; y++)
+                eng->blocks[bx][y][bz] = get_block_type(y, h);
+            eng->blocks[bx][0][bz] = BLOCK_STONE;
         }
 
     for (int i = 0; i < eng->editCount; i++) {
@@ -133,12 +154,12 @@ static void update_faces(struct engine* eng) {
                     continue;
                 }
                 unsigned char f = 0;
-                if (!buf_block(eng, x + 1, y, z)) f |= FACE_XP;
-                if (!buf_block(eng, x - 1, y, z)) f |= FACE_XN;
-                if (!buf_block(eng, x, y + 1, z)) f |= FACE_YP;
-                if (!buf_block(eng, x, y - 1, z)) f |= FACE_YN;
-                if (!buf_block(eng, x, y, z + 1)) f |= FACE_ZP;
-                if (!buf_block(eng, x, y, z - 1)) f |= FACE_ZN;
+                if (!buf_block(eng, x+1, y, z)) f |= FACE_XP;
+                if (!buf_block(eng, x-1, y, z)) f |= FACE_XN;
+                if (!buf_block(eng, x, y+1, z)) f |= FACE_YP;
+                if (!buf_block(eng, x, y-1, z)) f |= FACE_YN;
+                if (!buf_block(eng, x, y, z+1)) f |= FACE_ZP;
+                if (!buf_block(eng, x, y, z-1)) f |= FACE_ZN;
                 eng->faces[x][y][z] = f;
             }
 }
@@ -156,16 +177,6 @@ static void update_world(struct engine* eng) {
         load_blocks_around(eng, px, pz);
 }
 
-/*
- * Получить направление взгляда из view матрицы.
- * Самый надёжный способ — строим view матрицу и берём
- * 3-й столбец (forward = -Z ось камеры).
- *
- * В column-major view матрице:
- *   right   = (view[0], view[4], view[8])
- *   up      = (view[1], view[5], view[9])
- *   forward = (-view[2], -view[6], -view[10])
- */
 static void get_look_dir(struct engine* eng,
                          float* dx, float* dy, float* dz) {
     float view[16];
@@ -181,12 +192,12 @@ static bool raycast(struct engine* eng,
     float dx, dy, dz;
     get_look_dir(eng, &dx, &dy, &dz);
 
-    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+    float len = sqrtf(dx*dx + dy*dy + dz*dz);
     if (len < 0.001f) return false;
     dx /= len; dy /= len; dz /= len;
 
     *prevX = -9999; *prevY = -9999; *prevZ = -9999;
-    int lastWx = -9999, lastWy = -9999, lastWz = -9999;
+    int lx = -9999, ly = -9999, lz = -9999;
 
     for (float t = 0.1f; t < RAY_DIST; t += RAY_STEP) {
         float rx = eng->camPos[0] + dx * t;
@@ -196,16 +207,14 @@ static bool raycast(struct engine* eng,
         int wx, wy, wz;
         pos_to_block(rx, ry, rz, &wx, &wy, &wz);
 
-        if (wx == lastWx && wy == lastWy && wz == lastWz)
-            continue;
+        if (wx == lx && wy == ly && wz == lz) continue;
 
         if (world_block_at(eng, wx, wy, wz) > 0) {
             *hitX = wx; *hitY = wy; *hitZ = wz;
-            *prevX = lastWx; *prevY = lastWy; *prevZ = lastWz;
+            *prevX = lx; *prevY = ly; *prevZ = lz;
             return true;
         }
-
-        lastWx = wx; lastWy = wy; lastWz = wz;
+        lx = wx; ly = wy; lz = wz;
     }
     return false;
 }
@@ -214,34 +223,28 @@ static void break_block(struct engine* eng) {
     int hx, hy, hz, px, py, pz;
     if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
         if (hy <= 0) return;
-        world_set_block(eng, hx, hy, hz, 0);
+        world_set_block(eng, hx, hy, hz, BLOCK_AIR);
     }
 }
 
 static void place_block(struct engine* eng) {
     int hx, hy, hz, px, py, pz;
     if (!raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) return;
-
-    if (px == -9999 || py == -9999 || pz == -9999) return;
-    if (py < 0 || py >= CHUNK_H) return;
+    if (px == -9999 || py < 0 || py >= CHUNK_H) return;
     if (world_block_at(eng, px, py, pz) > 0) return;
 
-    float bRx = (float)px;
-    float bRy = (float)py;
-    float bRz = -(float)pz;
-
+    float bRx = (float)px, bRy = (float)py, bRz = -(float)pz;
     float footY = eng->camPos[1] - EYE_H;
     float headY = eng->camPos[1] + HEAD_MARGIN;
 
-    bool oX = (eng->camPos[0] + PLAYER_W > bRx - 0.5f) &&
-              (eng->camPos[0] - PLAYER_W < bRx + 0.5f);
-    bool oZ = (eng->camPos[2] + PLAYER_W > bRz - 0.5f) &&
-              (eng->camPos[2] - PLAYER_W < bRz + 0.5f);
-    bool oY = (headY > bRy - 0.5f) && (footY < bRy + 0.5f);
-
+    bool oX = (eng->camPos[0]+PLAYER_W > bRx-0.5f) && (eng->camPos[0]-PLAYER_W < bRx+0.5f);
+    bool oZ = (eng->camPos[2]+PLAYER_W > bRz-0.5f) && (eng->camPos[2]-PLAYER_W < bRz+0.5f);
+    bool oY = (headY > bRy-0.5f) && (footY < bRy+0.5f);
     if (oX && oY && oZ) return;
 
-    world_set_block(eng, px, py, pz, 1);
+    unsigned char blockType = eng->invSlots[eng->selectedSlot];
+    if (blockType == BLOCK_AIR) return;
+    world_set_block(eng, px, py, pz, blockType);
 }
 
 #endif
