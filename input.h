@@ -54,8 +54,8 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         float bbX = eng->width - BREAK_BTN_X, bbY = BREAK_BTN_Y;
         float dbx = x - bbX, dby = y - bbY;
         if (sqrtf(dbx * dbx + dby * dby) < ACTION_BTN_SIZE * 1.3f) {
+            eng->animBreakTimer = ANIM_BREAK_FRAMES;
             break_block(eng);
-            eng->animBreakTimer = ANIM_BREAK_TIME;
             return 1;
         }
 
@@ -63,8 +63,8 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         float pbX = eng->width - PLACE_BTN_X, pbY = PLACE_BTN_Y;
         float dpx = x - pbX, dpy = y - pbY;
         if (sqrtf(dpx * dpx + dpy * dpy) < ACTION_BTN_SIZE * 1.3f) {
+            eng->animPlaceTimer = ANIM_PLACE_FRAMES;
             place_block(eng);
-            eng->animPlaceTimer = ANIM_PLACE_TIME;
             return 1;
         }
 
