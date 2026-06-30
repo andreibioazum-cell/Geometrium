@@ -22,19 +22,6 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         float y = AMotionEvent_getY(event, pi);
         int id = AMotionEvent_getPointerId(event, pi);
 
-        /* Инвентарь — нижняя центральная полоска */
-        float invW = INV_SLOTS * (INV_SLOT_SIZE + INV_PADDING) - INV_PADDING;
-        float invStartX = (eng->width - invW) / 2.0f;
-        float invY = eng->height - INV_Y_OFFSET;
-        if (y > invY - INV_SLOT_SIZE/2 && y < invY + INV_SLOT_SIZE/2 &&
-            x > invStartX && x < invStartX + invW) {
-            int slot = (int)((x - invStartX) / (INV_SLOT_SIZE + INV_PADDING));
-            if (slot >= 0 && slot < INV_SLOTS) {
-                eng->selectedSlot = slot;
-                return 1;
-            }
-        }
-
         /* Прыжок */
         float jbX = eng->width - JUMP_BTN_OFFSET, jbY = eng->height - JUMP_BTN_OFFSET;
         float djx = x - jbX, djy = y - jbY;
@@ -53,6 +40,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         float dpx = x - pbX, dpy = y - pbY;
         if (sqrtf(dpx*dpx + dpy*dpy) < ACTION_BTN_SIZE * 1.3f) { place_block(eng); return 1; }
 
+        /* Джойстик */
         if (x < eng->width / 2) {
             eng->joyX = JOY_X_OFFSET; eng->joyY = eng->height - JOY_Y_OFFSET;
             eng->isMoving = true; eng->movePointerId = id;
@@ -72,7 +60,8 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
                 float d = sqrtf(dx*dx + dy*dy);
                 if (d > 10.0f) {
                     float c = d > JOY_RADIUS ? JOY_RADIUS : d;
-                    eng->moveDirX = (dx/d)*(c/JOY_RADIUS); eng->moveDirZ = (dy/d)*(c/JOY_RADIUS);
+                    eng->moveDirX = (dx/d)*(c/JOY_RADIUS);
+                    eng->moveDirZ = (dy/d)*(c/JOY_RADIUS);
                 } else { eng->moveDirX = 0; eng->moveDirZ = 0; }
             }
             if (id == eng->lookPointerId) {
@@ -89,7 +78,9 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
     if (code == AMOTION_EVENT_ACTION_UP || code == AMOTION_EVENT_ACTION_POINTER_UP) {
         int pi = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
         int id = AMotionEvent_getPointerId(event, pi);
-        if (id == eng->movePointerId) { eng->isMoving = false; eng->moveDirX = 0; eng->moveDirZ = 0; eng->movePointerId = -1; }
+        if (id == eng->movePointerId) {
+            eng->isMoving = false; eng->moveDirX = 0; eng->moveDirZ = 0; eng->movePointerId = -1;
+        }
         if (id == eng->lookPointerId) eng->lookPointerId = -1;
         return 1;
     }
