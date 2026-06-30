@@ -47,20 +47,8 @@
 
 #define MAX_EDITS       512
 
-/* Типы блоков */
 #define BLOCK_AIR       0
 #define BLOCK_GRASS     1
-#define BLOCK_DIRT      2
-#define BLOCK_STONE     3
-#define BLOCK_SAND      4
-#define BLOCK_SNOW      5
-#define BLOCK_COUNT     6
-
-/* Инвентарь */
-#define INV_SLOTS       5
-#define INV_SLOT_SIZE   50.0f
-#define INV_PADDING     8.0f
-#define INV_Y_OFFSET    60.0f
 
 struct block_edit {
     int wx, wy, wz;
@@ -74,9 +62,9 @@ struct engine {
     EGLContext context;
     int32_t width, height;
     GLuint program;
-    GLuint texTop[BLOCK_COUNT];
-    GLuint texSide[BLOCK_COUNT];
-    GLuint texBottom[BLOCK_COUNT];
+    GLuint texGrassTop;
+    GLuint texGrassSide;
+    GLuint texGrassDown;
 
     float camPos[3];
     float camRot[2];
@@ -103,10 +91,6 @@ struct engine {
 
     struct block_edit edits[MAX_EDITS];
     int editCount;
-
-    /* Инвентарь */
-    unsigned char invSlots[INV_SLOTS];
-    int selectedSlot;
 };
 
 #endif
