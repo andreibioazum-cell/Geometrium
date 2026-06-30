@@ -4,6 +4,7 @@
 #include <math.h>
 #include <string.h>
 #include "engine.h"
+#include "math_utils.h"
 
 static unsigned int hash2d(int x, int z) {
     unsigned int h = (unsigned int)(x * 374761393 + z * 668265263);
@@ -40,17 +41,6 @@ static int get_height(int wx, int wz) {
     return height;
 }
 
-/*
- * Блок (wx,wy,wz) рендерится с центром (wx, wy, -wz).
- * Занимает куб [wx-0.5 .. wx+0.5] по render_x
- *              [wy-0.5 .. wy+0.5] по render_y
- *              [-wz-0.5 .. -wz+0.5] по render_z
- *
- * Точка рендера (rx,ry,rz) попадает в блок:
- *   wx = floor(rx + 0.5)  = round(rx)
- *   wy = floor(ry + 0.5)  = round(ry)
- *   wz = floor(-rz + 0.5) = round(-rz)
- */
 static void pos_to_block(float rx, float ry, float rz,
                          int* wx, int* wy, int* wz) {
     *wx = (int)floorf(rx + 0.5f);
@@ -166,21 +156,25 @@ static void update_world(struct engine* eng) {
         load_blocks_around(eng, px, pz);
 }
 
-static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {
-    float cp = cosf(eng->camRot[0]);
-    float sp = sinf(eng->camRot[0]);
-    float sy = sinf(eng->camRot[1]);
-    float cy = cosf(eng->camRot[1]);
-    *dx = -sy * cp;
-    *dy = -sp;
-    *dz = -cy * cp;
+/*
+ * Получить направление взгляда из view матрицы.
+ * Самый надёжный способ — строим view матрицу и берём
+ * 3-й столбец (forward = -Z ось камеры).
+ *
+ * В column-major view матрице:
+ *   right   = (view[0], view[4], view[8])
+ *   up      = (view[1], view[5], view[9])
+ *   forward = (-view[2], -view[6], -view[10])
+ */
+static void get_look_dir(struct engine* eng,
+                         float* dx, float* dy, float* dz) {
+    float view[16];
+    mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
+    *dx = -view[2];
+    *dy = -view[6];
+    *dz = -view[10];
 }
 
-/*
- * Raycast — надёжный, с проверкой каждого блока на пути.
- * Начинаем чуть впереди камеры чтобы не попасть в блок где стоим.
- * prev всегда валидный пустой блок перед hit.
- */
 static bool raycast(struct engine* eng,
                     int* hitX, int* hitY, int* hitZ,
                     int* prevX, int* prevY, int* prevZ) {
@@ -194,7 +188,6 @@ static bool raycast(struct engine* eng,
     *prevX = -9999; *prevY = -9999; *prevZ = -9999;
     int lastWx = -9999, lastWy = -9999, lastWz = -9999;
 
-    /* Начинаем с t=0.1 чтобы пропустить блок в котором стоит камера */
     for (float t = 0.1f; t < RAY_DIST; t += RAY_STEP) {
         float rx = eng->camPos[0] + dx * t;
         float ry = eng->camPos[1] + dy * t;
@@ -229,14 +222,10 @@ static void place_block(struct engine* eng) {
     int hx, hy, hz, px, py, pz;
     if (!raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) return;
 
-    /* prev должен быть валидным */
     if (px == -9999 || py == -9999 || pz == -9999) return;
     if (py < 0 || py >= CHUNK_H) return;
-
-    /* Проверяем что prev реально пустой */
     if (world_block_at(eng, px, py, pz) > 0) return;
 
-    /* Не ставить внутри игрока */
     float bRx = (float)px;
     float bRy = (float)py;
     float bRz = -(float)pz;
