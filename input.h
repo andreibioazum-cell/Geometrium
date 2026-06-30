@@ -31,7 +31,7 @@ static int32_t engine_handle_input(struct android_app* app,
         float jbX = eng->width - JUMP_BTN_OFFSET;
         float jbY = eng->height - JUMP_BTN_OFFSET;
         float djx = x - jbX, djy = y - jbY;
-        if (sqrtf(djx*djx + djy*djy) < JUMP_BTN_SIZE * 1.3f) {
+        if (sqrtf(djx * djx + djy * djy) < JUMP_BTN_SIZE * 1.2f) {
             if (eng->onGround) {
                 eng->velY = JUMP_FORCE;
                 eng->onGround = false;
@@ -39,20 +39,20 @@ static int32_t engine_handle_input(struct android_app* app,
             return 1;
         }
 
-        /* Кнопка ломания — правый верх */
+        /* Ломание */
         float bbX = eng->width - BREAK_BTN_X;
         float bbY = BREAK_BTN_Y;
         float dbx = x - bbX, dby = y - bbY;
-        if (sqrtf(dbx*dbx + dby*dby) < ACTION_BTN_SIZE * 1.3f) {
+        if (sqrtf(dbx * dbx + dby * dby) < ACTION_BTN_SIZE * 1.3f) {
             break_block(eng);
             return 1;
         }
 
-        /* Кнопка ставления — правый верх ниже */
+        /* Ставление */
         float pbX = eng->width - PLACE_BTN_X;
         float pbY = PLACE_BTN_Y;
         float dpx = x - pbX, dpy = y - pbY;
-        if (sqrtf(dpx*dpx + dpy*dpy) < ACTION_BTN_SIZE * 1.3f) {
+        if (sqrtf(dpx * dpx + dpy * dpy) < ACTION_BTN_SIZE * 1.3f) {
             place_block(eng);
             return 1;
         }
@@ -81,11 +81,11 @@ static int32_t engine_handle_input(struct android_app* app,
 
             if (id == eng->movePointerId && eng->isMoving) {
                 float dx = x - eng->joyX, dy = y - eng->joyY;
-                float d = sqrtf(dx*dx + dy*dy);
+                float d = sqrtf(dx * dx + dy * dy);
                 if (d > 10.0f) {
                     float clamp = d > JOY_RADIUS ? JOY_RADIUS : d;
-                    eng->moveDirX = (dx/d) * (clamp/JOY_RADIUS);
-                    eng->moveDirZ = (dy/d) * (clamp/JOY_RADIUS);
+                    eng->moveDirX = (dx / d) * (clamp / JOY_RADIUS);
+                    eng->moveDirZ = (dy / d) * (clamp / JOY_RADIUS);
                 } else {
                     eng->moveDirX = 0;
                     eng->moveDirZ = 0;
