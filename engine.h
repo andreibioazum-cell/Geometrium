@@ -50,6 +50,16 @@
 #define BLOCK_AIR       0
 #define BLOCK_GRASS     1
 
+/* Инвентарь */
+#define INV_SLOTS       5
+#define INV_SLOT_SIZE   50.0f
+#define INV_PADDING     8.0f
+#define INV_Y_OFFSET    55.0f
+
+/* Анимация */
+#define ANIM_BREAK_TIME 8
+#define ANIM_PLACE_TIME 6
+
 struct block_edit {
     int wx, wy, wz;
     unsigned char val;
@@ -91,6 +101,15 @@ struct engine {
 
     struct block_edit edits[MAX_EDITS];
     int editCount;
+
+    /* Инвентарь */
+    unsigned char invSlots[INV_SLOTS];
+    int selectedSlot;
+
+    /* Анимация ломания/ставки */
+    int animBreakTimer;
+    int animPlaceTimer;
+    float animHandAngle;
 };
 
 #endif
