@@ -50,17 +50,67 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         eglMakeCurrent(eng->display, eng->surface,
                        eng->surface, eng->context);
 
-        /* Шейдер мира — с текстурой */
+        /*
+         * Шейдер с освещением:
+         * - Направленный свет сверху-сбоку (солнце)
+         * - Ambient чтобы тени не были чёрными
+         * - Каждая грань получает свою яркость по нормали
+         */
         const char* vS =
-            "attribute vec4 p; attribute vec2 t;"
-            "varying vec2 vT; uniform mat4 m;"
-            "void main(){ gl_Position=m*p; vT=t; }";
+            "attribute vec3 pos;"
+            "attribute vec2 uv;"
+            "attribute vec3 norm;"
+            "varying vec2 vUV;"
+            "varying vec3 vNorm;"
+            "varying vec3 vWorldPos;"
+            "uniform mat4 m;"
+            "void main(){"
+            "  gl_Position = m * vec4(pos, 1.0);"
+            "  vUV = uv;"
+            "  vNorm = norm;"
+            "  vWorldPos = pos;"
+            "}";
+
         const char* fS =
             "precision mediump float;"
-            "varying vec2 vT;"
+            "varying vec2 vUV;"
+            "varying vec3 vNorm;"
+            "varying vec3 vWorldPos;"
             "uniform sampler2D tex;"
             "void main(){"
-            "  gl_FragColor = texture2D(tex, vT);"
+            "  vec4 texCol = texture2D(tex, vUV);"
+            ""
+            "  /* Солнце — сверху-справа-спереди */"
+            "  vec3 lightDir = normalize(vec3(0.4, 0.9, 0.3));"
+            ""
+            "  /* Diffuse — основное освещение */"
+            "  float diff = max(dot(vNorm, lightDir), 0.0);"
+            ""
+            "  /* Ambient — чтобы тени не были чёрными */"
+            "  float ambient = 0.45;"
+            ""
+            "  /* Верхние грани ярче, нижние темнее */"
+            "  float topBoost = 0.0;"
+            "  if (vNorm.y > 0.5) topBoost = 0.1;"
+            "  if (vNorm.y < -0.5) topBoost = -0.15;"
+            ""
+            "  /* Боковые грани чуть разные для объёмности */"
+            "  float sideShade = 0.0;"
+            "  if (abs(vNorm.x) > 0.5) sideShade = -0.05;"
+            "  if (abs(vNorm.z) > 0.5) sideShade = -0.1;"
+            ""
+            "  float light = ambient + diff * 0.55 + topBoost + sideShade;"
+            "  light = clamp(light, 0.2, 1.0);"
+            ""
+            "  /* Лёгкий туман на дальних расстояниях */"
+            "  float dist = length(vWorldPos.xz);"
+            "  float fog = clamp((dist - 30.0) / 50.0, 0.0, 0.6);"
+            "  vec3 fogCol = vec3(0.5, 0.8, 1.0);"
+            ""
+            "  vec3 col = texCol.rgb * light;"
+            "  col = mix(col, fogCol, fog);"
+            ""
+            "  gl_FragColor = vec4(col, texCol.a);"
             "}";
 
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
@@ -70,13 +120,18 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         glShaderSource(fs, 1, &fS, NULL);
         glCompileShader(fs);
         eng->program = glCreateProgram();
+
+        /* Привязываем атрибуты до линковки */
+        glBindAttribLocation(eng->program, 0, "pos");
+        glBindAttribLocation(eng->program, 1, "uv");
+        glBindAttribLocation(eng->program, 2, "norm");
+
         glAttachShader(eng->program, vs);
         glAttachShader(eng->program, fs);
         glLinkProgram(eng->program);
         glDeleteShader(vs);
         glDeleteShader(fs);
 
-        /* Загрузка текстуры травы */
         eng->texture = load_texture(eng->app, "grass.png");
 
         init_ui_shader();
