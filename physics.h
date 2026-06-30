@@ -14,10 +14,10 @@ static bool is_solid(struct engine* eng, float x, float y, float z) {
 }
 
 static bool check_box(struct engine* eng, float x, float y, float z) {
-    return is_solid(eng, x - PLAYER_W, y, z - PLAYER_W) ||
-           is_solid(eng, x + PLAYER_W, y, z - PLAYER_W) ||
-           is_solid(eng, x - PLAYER_W, y, z + PLAYER_W) ||
-           is_solid(eng, x + PLAYER_W, y, z + PLAYER_W);
+    return is_solid(eng, x-PLAYER_W, y, z-PLAYER_W) ||
+           is_solid(eng, x+PLAYER_W, y, z-PLAYER_W) ||
+           is_solid(eng, x-PLAYER_W, y, z+PLAYER_W) ||
+           is_solid(eng, x+PLAYER_W, y, z+PLAYER_W);
 }
 
 static bool check_ground(struct engine* eng, float x, float footY, float z) {
@@ -30,18 +30,18 @@ static bool check_ceiling(struct engine* eng, float x, float headY, float z) {
 
 static bool check_wall(struct engine* eng, float x, float eyeY, float z) {
     float foot = eyeY - EYE_H;
-    return check_box(eng, x, foot + 0.1f, z) ||
-           check_box(eng, x, foot + 0.6f, z) ||
-           check_box(eng, x, foot + 1.2f, z) ||
-           check_box(eng, x, foot + 1.8f, z);
+    return check_box(eng, x, foot+0.1f, z) ||
+           check_box(eng, x, foot+0.6f, z) ||
+           check_box(eng, x, foot+1.2f, z) ||
+           check_box(eng, x, foot+1.8f, z);
 }
 
 static bool check_inside(struct engine* eng, float x, float eyeY, float z) {
     return is_solid(eng, x, eyeY, z) ||
-           is_solid(eng, x - PLAYER_W, eyeY, z) ||
-           is_solid(eng, x + PLAYER_W, eyeY, z) ||
-           is_solid(eng, x, eyeY, z - PLAYER_W) ||
-           is_solid(eng, x, eyeY, z + PLAYER_W);
+           is_solid(eng, x-PLAYER_W, eyeY, z) ||
+           is_solid(eng, x+PLAYER_W, eyeY, z) ||
+           is_solid(eng, x, eyeY, z-PLAYER_W) ||
+           is_solid(eng, x, eyeY, z+PLAYER_W);
 }
 
 static void apply_physics(struct engine* eng) {
@@ -54,7 +54,7 @@ static void apply_physics(struct engine* eng) {
 
     eng->onGround = false;
 
-    if (check_ground(eng, eng->camPos[0], eng->camPos[1] - EYE_H, eng->camPos[2]))
+    if (check_ground(eng, eng->camPos[0], eng->camPos[1]-EYE_H, eng->camPos[2]))
         eng->onGround = true;
 
     if (eng->velY <= 0) {
@@ -80,9 +80,9 @@ static void apply_physics(struct engine* eng) {
         float dx = (fX * -eng->moveDirZ + rX * eng->moveDirX) * speed;
         float dz = (fZ * -eng->moveDirZ + rZ * eng->moveDirX) * speed;
 
-        if (!check_wall(eng, eng->camPos[0] + dx, eng->camPos[1], eng->camPos[2]))
+        if (!check_wall(eng, eng->camPos[0]+dx, eng->camPos[1], eng->camPos[2]))
             eng->camPos[0] += dx;
-        if (!check_wall(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2] + dz))
+        if (!check_wall(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2]+dz))
             eng->camPos[2] += dz;
     }
 
@@ -95,9 +95,9 @@ static void apply_physics(struct engine* eng) {
     }
 
     if (eng->camPos[1] < -10.0f) {
-        eng->camPos[1] = get_spawn_y_world(eng,
-            (int)floorf(eng->camPos[0]),
-            (int)floorf(-eng->camPos[2]));
+        int wx = (int)floorf(eng->camPos[0]);
+        int wz = (int)floorf(-eng->camPos[2]);
+        eng->camPos[1] = (float)get_height(wx, wz) + 2.5f;
         eng->velY = 0;
     }
 }
