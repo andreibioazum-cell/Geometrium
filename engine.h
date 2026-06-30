@@ -6,7 +6,6 @@
 #include <GLES2/gl2.h>
 #include <stdbool.h>
 
-/* Джойстик и прыжок одного размера */
 #define JOY_RADIUS      80.0f
 #define JOY_Y_OFFSET    160.0f
 #define JOY_X_OFFSET    130.0f
@@ -15,7 +14,6 @@
 #define JUMP_BTN_SIZE   80.0f
 #define JUMP_BTN_OFFSET 130.0f
 
-/* Кнопки действий */
 #define ACTION_BTN_SIZE 45.0f
 #define BREAK_BTN_X     80.0f
 #define BREAK_BTN_Y     80.0f
@@ -25,7 +23,6 @@
 #define PI              3.14159265f
 
 #define PLAYER_W        0.4f
-#define PLAYER_H        2.0f
 #define EYE_H           1.65f
 #define HEAD_MARGIN     0.15f
 #define GAME_FOV        1.4915f
@@ -47,6 +44,14 @@
 
 #define RAY_DIST        6.0f
 #define RAY_STEP        0.02f
+
+/* Максимум сохранённых изменений блоков */
+#define MAX_EDITS       512
+
+struct block_edit {
+    int wx, wy, wz;
+    unsigned char val;
+};
 
 struct engine {
     struct android_app* app;
@@ -79,6 +84,10 @@ struct engine {
 
     unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
     unsigned char faces[WORLD_BUF][CHUNK_H][WORLD_BUF];
+
+    /* Сохранённые изменения блоков */
+    struct block_edit edits[MAX_EDITS];
+    int editCount;
 };
 
 #endif
