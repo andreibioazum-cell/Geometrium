@@ -62,6 +62,7 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
             "uniform sampler2D texSide;"
             "uniform sampler2D texDown;"
             "void main(){"
+            /* Выбор текстуры по нормали */
             "  vec4 texCol;"
             "  if(vNorm.y > 0.5)"
             "    texCol = texture2D(texTop, vUV);"
@@ -69,22 +70,30 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
             "    texCol = texture2D(texDown, vUV);"
             "  else"
             "    texCol = texture2D(texSide, vUV);"
-            ""
-            "  vec3 lightDir = normalize(vec3(0.4, 0.9, 0.3));"
-            "  float diff = max(dot(vNorm, lightDir), 0.0);"
-            "  float ambient = 0.45;"
+            /* Освещение */
+            "  vec3 sun = normalize(vec3(0.35, 0.85, 0.4));"
+            "  float diff = max(dot(vNorm, sun), 0.0);"
+            "  float ambient = 0.42;"
             "  float faceBias = 0.0;"
-            "  if(vNorm.y > 0.5) faceBias = 0.1;"
-            "  if(vNorm.y < -0.5) faceBias = -0.15;"
-            "  if(abs(vNorm.x) > 0.5) faceBias = -0.05;"
-            "  if(abs(vNorm.z) > 0.5) faceBias = -0.1;"
-            "  float light = clamp(ambient + diff * 0.55 + faceBias, 0.2, 1.0);"
-            ""
+            "  if(vNorm.y > 0.5) faceBias = 0.12;"
+            "  if(vNorm.y < -0.5) faceBias = -0.18;"
+            "  if(abs(vNorm.x) > 0.5) faceBias = -0.06;"
+            "  if(abs(vNorm.z) > 0.5) faceBias = -0.12;"
+            "  float light = clamp(ambient + diff * 0.58 + faceBias, 0.18, 1.0);"
+            /* Лёгкий rim light снизу для объёма */
+            "  float rim = 1.0 - max(dot(vNorm, vec3(0.0, 1.0, 0.0)), 0.0);"
+            "  rim = rim * rim * 0.08;"
+            /* Насыщенность — чуть поднимаем */
+            "  vec3 lit = texCol.rgb * light + rim;"
+            "  float gray = dot(lit, vec3(0.299, 0.587, 0.114));"
+            "  vec3 saturated = mix(vec3(gray), lit, 1.15);"
+            /* Туман */
             "  vec3 toFrag = vWorldPos - camPos;"
             "  float dist = length(toFrag.xz);"
             "  vec3 fogCol = vec3(0.53, 0.81, 0.98);"
-            "  float fog = clamp((dist - 20.0) / 25.0, 0.0, 0.85);"
-            "  vec3 col = mix(texCol.rgb * light, fogCol, fog);"
+            "  float fog = clamp((dist - 22.0) / 24.0, 0.0, 0.88);"
+            "  vec3 col = mix(saturated, fogCol, fog);"
+            /* Лёгкая виньетка по расстоянию */
             "  gl_FragColor = vec4(col, 1.0);"
             "}";
 
@@ -112,6 +121,11 @@ void android_main(struct android_app* state) {
     eng.lookPointerId = -1;
     eng.worldLoaded = false;
     eng.meshDirty = true;
+    eng.selectedSlot = 0;
+
+    /* Инвентарь — все слоты трава */
+    for (int i = 0; i < INV_SLOTS; i++)
+        eng.invSlots[i] = BLOCK_GRASS;
 
     eng.camPos[0] = 0.5f;
     eng.camPos[2] = -0.5f;
