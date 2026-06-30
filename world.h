@@ -127,9 +127,12 @@ static void update_faces(struct engine* eng) {
             for (int z = 0; z < WORLD_BUF; z++) {
                 if (!eng->blocks[x][y][z]) { eng->faces[x][y][z] = 0; continue; }
                 unsigned char f = 0;
-                if (!buf_block(eng,x+1,y,z)) f|=FACE_XP; if (!buf_block(eng,x-1,y,z)) f|=FACE_XN;
-                if (!buf_block(eng,x,y+1,z)) f|=FACE_YP; if (!buf_block(eng,x,y-1,z)) f|=FACE_YN;
-                if (!buf_block(eng,x,y,z+1)) f|=FACE_ZP; if (!buf_block(eng,x,y,z-1)) f|=FACE_ZN;
+                if (!buf_block(eng,x+1,y,z)) f|=FACE_XP;
+                if (!buf_block(eng,x-1,y,z)) f|=FACE_XN;
+                if (!buf_block(eng,x,y+1,z)) f|=FACE_YP;
+                if (!buf_block(eng,x,y-1,z)) f|=FACE_YN;
+                if (!buf_block(eng,x,y,z+1)) f|=FACE_ZP;
+                if (!buf_block(eng,x,y,z-1)) f|=FACE_ZN;
                 eng->faces[x][y][z] = f;
             }
 }
@@ -157,19 +160,18 @@ static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ,
     dx/=len; dy/=len; dz/=len;
     *prevX=-9999;*prevY=-9999;*prevZ=-9999;
     int lx=-9999,ly=-9999,lz=-9999;
-    for (float t=0.1f;t<RAY_DIST;t+=RAY_STEP) {
+    for (float t=0.1f; t<RAY_DIST; t+=RAY_STEP) {
         int wx,wy,wz;
-        pos_to_block(eng->camPos[0]+dx*t,eng->camPos[1]+dy*t,eng->camPos[2]+dz*t,&wx,&wy,&wz);
+        pos_to_block(eng->camPos[0]+dx*t, eng->camPos[1]+dy*t, eng->camPos[2]+dz*t, &wx,&wy,&wz);
         if (wx==lx&&wy==ly&&wz==lz) continue;
         if (world_block_at(eng,wx,wy,wz)>0) {
-            *hitX=wx;*hitY=wy;*hitZ=wz;*prevX=lx;*prevY=ly;*prevZ=lz;return true;
+            *hitX=wx;*hitY=wy;*hitZ=wz;*prevX=lx;*prevY=ly;*prevZ=lz; return true;
         }
         lx=wx;ly=wy;lz=wz;
     }
     return false;
 }
 
-/* Добавить блок в первый пустой слот инвентаря */
 static void inv_add_block(struct engine* eng, unsigned char type) {
     for (int i = 0; i < INV_SLOTS; i++) {
         if (eng->invSlots[i] == BLOCK_AIR) {
@@ -179,7 +181,6 @@ static void inv_add_block(struct engine* eng, unsigned char type) {
     }
 }
 
-/* Убрать блок из выбранного слота */
 static bool inv_use_block(struct engine* eng) {
     if (eng->invSlots[eng->selectedSlot] == BLOCK_AIR) return false;
     eng->invSlots[eng->selectedSlot] = BLOCK_AIR;
@@ -187,12 +188,15 @@ static bool inv_use_block(struct engine* eng) {
 }
 
 static void start_block_anim(struct engine* eng, int wx, int wy, int wz, bool breaking) {
-    eng->animBlockActive = true;
+    eng->animActive = true;
     eng->animBlockX = (float)wx;
     eng->animBlockY = (float)wy;
     eng->animBlockZ = -(float)wz;
-    eng->animBlockScale = breaking ? 1.0f : 0.0f;
-    eng->animBlockBreaking = breaking;
+    eng->animIsBreak = breaking;
+    if (breaking)
+        eng->animBreakTimer = ANIM_BREAK_FRAMES;
+    else
+        eng->animPlaceTimer = ANIM_PLACE_FRAMES;
 }
 
 static void break_block(struct engine* eng) {
@@ -200,9 +204,9 @@ static void break_block(struct engine* eng) {
     if (raycast(eng,&hx,&hy,&hz,&px,&py,&pz)) {
         if (hy<=0) return;
         unsigned char type = (unsigned char)world_block_at(eng, hx, hy, hz);
+        start_block_anim(eng, hx, hy, hz, true);
         world_set_block(eng,hx,hy,hz,BLOCK_AIR);
         inv_add_block(eng, type);
-        start_block_anim(eng, hx, hy, hz, true);
     }
 }
 
@@ -217,8 +221,8 @@ static void place_block(struct engine* eng) {
         (eng->camPos[2]+PLAYER_W>bRz-0.5f)&&(eng->camPos[2]-PLAYER_W<bRz+0.5f)&&
         (headY>bRy-0.5f)&&(footY<bRy+0.5f)) return;
     if (!inv_use_block(eng)) return;
-    world_set_block(eng,px,py,pz,BLOCK_GRASS);
     start_block_anim(eng, px, py, pz, false);
+    world_set_block(eng,px,py,pz,BLOCK_GRASS);
 }
 
 #endif
