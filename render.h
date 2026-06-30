@@ -224,7 +224,6 @@ static void draw_circle(float cx, float cy, float r,
     glDrawArrays(GL_TRIANGLE_FAN, 0, segs + 2);
 }
 
-/* Рисует ровный прямоугольник по центру (cx,cy), размер в пикселях */
 static void draw_rect(float cx, float cy, float hw, float hh,
                       int sw, int sh,
                       float cr, float cg, float cb, float ca) {
@@ -233,12 +232,8 @@ static void draw_rect(float cx, float cy, float hw, float hh,
     float rw = (hw / sw) * 2.0f;
     float rh = (hh / sh) * 2.0f;
     float verts[] = {
-        nx - rw, ny - rh,
-        nx + rw, ny - rh,
-        nx + rw, ny + rh,
-        nx - rw, ny - rh,
-        nx + rw, ny + rh,
-        nx - rw, ny + rh
+        nx - rw, ny - rh, nx + rw, ny - rh, nx + rw, ny + rh,
+        nx - rw, ny - rh, nx + rw, ny + rh, nx - rw, ny + rh
     };
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg, "col"), cr, cg, cb, ca);
@@ -255,14 +250,15 @@ static void draw_ui(struct engine* eng) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    /* Прицел — ровный крестик по центру */
+    /* Прицел — чёрный крестик с белой обводкой для видимости на любом фоне */
     float ccx = sw / 2.0f;
     float ccy = sh / 2.0f;
-    draw_rect(ccx, ccy, 10.0f, 1.5f, sw, sh, 1, 1, 1, 0.9f);
-    draw_rect(ccx, ccy, 1.5f, 10.0f, sw, sh, 1, 1, 1, 0.9f);
-    /* Чёрная обводка крестика */
-    draw_rect(ccx, ccy, 11.0f, 0.5f, sw, sh, 0, 0, 0, 0.5f);
-    draw_rect(ccx, ccy, 0.5f, 11.0f, sw, sh, 0, 0, 0, 0.5f);
+    /* Белая обводка */
+    draw_rect(ccx, ccy, 12.0f, 2.5f, sw, sh, 1, 1, 1, 0.8f);
+    draw_rect(ccx, ccy, 2.5f, 12.0f, sw, sh, 1, 1, 1, 0.8f);
+    /* Чёрный центр */
+    draw_rect(ccx, ccy, 10.0f, 1.5f, sw, sh, 0, 0, 0, 1.0f);
+    draw_rect(ccx, ccy, 1.5f, 10.0f, sw, sh, 0, 0, 0, 1.0f);
 
     /* Джойстик */
     float jx = JOY_X_OFFSET;
@@ -272,11 +268,10 @@ static void draw_ui(struct engine* eng) {
     float hy = jy + eng->moveDirZ * JOY_RADIUS * 0.6f;
     draw_circle(hx, hy, STICK_RADIUS, sw, sh, 0, 0, 0, 1.0f);
 
-    /* Прыжок — такой же размер как джойстик */
+    /* Прыжок */
     float bx = sw - JUMP_BTN_OFFSET;
     float by = sh - JUMP_BTN_OFFSET;
     draw_ring(bx, by, JUMP_BTN_SIZE, 3.0f, sw, sh, 0, 0, 0, 1.0f);
-    /* Стрелка вверх */
     float as = JUMP_BTN_SIZE * 0.3f;
     float anx = (bx / sw) * 2.0f - 1.0f;
     float any = 1.0f - (by / sh) * 2.0f;
@@ -293,49 +288,24 @@ static void draw_ui(struct engine* eng) {
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
-    /* Кнопка ломания — X (правый верх) */
+    /* Кнопка ломания — X */
     float bbx = sw - BREAK_BTN_X;
     float bby = BREAK_BTN_Y;
     draw_ring(bbx, bby, ACTION_BTN_SIZE, 3.0f, sw, sh, 0, 0, 0, 1.0f);
-    /* Рисуем X двумя повёрнутыми прямоугольниками через треугольники */
-    float xsz = ACTION_BTN_SIZE * 0.3f;
+    /* X из двух перекрёстных полосок */
+    float xsz = ACTION_BTN_SIZE * 0.28f;
     float xw = 2.5f;
-    float xnx = (bbx / sw) * 2.0f - 1.0f;
-    float xny = 1.0f - (bby / sh) * 2.0f;
-    float xs1 = (xsz / sw) * 2.0f;
-    float ys1 = (xsz / sh) * 2.0f;
-    float xw1 = (xw / sw) * 2.0f;
-    float xw2 = (xw / sh) * 2.0f;
-    /* Диагональ \ */
-    float d1[] = {
-        xnx - xs1 - xw1, xny + ys1,
-        xnx - xs1 + xw1, xny + ys1,
-        xnx + xs1 + xw1, xny - ys1,
-        xnx - xs1 - xw1, xny + ys1,
-        xnx + xs1 + xw1, xny - ys1,
-        xnx + xs1 - xw1, xny - ys1
-    };
-    /* Диагональ / */
-    float d2[] = {
-        xnx + xs1 - xw1, xny + ys1,
-        xnx + xs1 + xw1, xny + ys1,
-        xnx - xs1 + xw1, xny - ys1,
-        xnx + xs1 - xw1, xny + ys1,
-        xnx - xs1 + xw1, xny - ys1,
-        xnx - xs1 - xw1, xny - ys1
-    };
-    glUniform4f(glGetUniformLocation(uiProg, "col"), 0, 0, 0, 1.0f);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, d1);
-    glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, d2);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    /* Полоска \ */
+    draw_rect(bbx - xsz * 0.5f, bby - xsz * 0.5f, xw, xsz * 0.15f, sw, sh, 0, 0, 0, 1.0f);
+    draw_rect(bbx + xsz * 0.5f, bby + xsz * 0.5f, xw, xsz * 0.15f, sw, sh, 0, 0, 0, 1.0f);
+    /* Просто два прямоугольника крестом */
+    draw_rect(bbx, bby, xsz, xw, sw, sh, 0, 0, 0, 1.0f);
+    draw_rect(bbx, bby, xw, xsz, sw, sh, 0, 0, 0, 1.0f);
 
-    /* Кнопка ставления — + (правый верх, ниже) */
+    /* Кнопка ставления — + */
     float pbx = sw - PLACE_BTN_X;
     float pby = PLACE_BTN_Y;
     draw_ring(pbx, pby, ACTION_BTN_SIZE, 3.0f, sw, sh, 0, 0, 0, 1.0f);
-    /* Плюс из двух прямоугольников */
     float psz = ACTION_BTN_SIZE * 0.3f;
     float pw = 2.5f;
     draw_rect(pbx, pby, psz, pw, sw, sh, 0, 0, 0, 1.0f);
