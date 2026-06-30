@@ -4,8 +4,42 @@
 #include <GLES2/gl2.h>
 #include <stdlib.h>
 #include <string.h>
+#include <android/asset_manager.h>
 #include "engine.h"
 #include "math_utils.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+/* Загрузка текстуры из assets */
+static GLuint load_texture(struct android_app* app, const char* filename) {
+    AAssetManager* mgr = app->activity->assetManager;
+    AAsset* asset = AAssetManager_open(mgr, filename, AASSET_MODE_BUFFER);
+    if (!asset) return 0;
+
+    size_t len = AAsset_getLength(asset);
+    unsigned char* buf = (unsigned char*)malloc(len);
+    AAsset_read(asset, buf, len);
+    AAsset_close(asset);
+
+    int w, h, ch;
+    unsigned char* img = stbi_load_from_memory(buf, (int)len, &w, &h, &ch, 4);
+    free(buf);
+    if (!img) return 0;
+
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, img);
+    stbi_image_free(img);
+
+    return tex;
+}
 
 static void push_quad(float* buf, int* idx,
                       float x0,float y0,float z0, float u0,float v0,
@@ -18,6 +52,7 @@ static void push_quad(float* buf, int* idx,
     buf[(*idx)++]=u1; buf[(*idx)++]=v1;
     buf[(*idx)++]=x2; buf[(*idx)++]=y2; buf[(*idx)++]=z2;
     buf[(*idx)++]=u2; buf[(*idx)++]=v2;
+
     buf[(*idx)++]=x0; buf[(*idx)++]=y0; buf[(*idx)++]=z0;
     buf[(*idx)++]=u0; buf[(*idx)++]=v0;
     buf[(*idx)++]=x2; buf[(*idx)++]=y2; buf[(*idx)++]=z2;
@@ -26,12 +61,14 @@ static void push_quad(float* buf, int* idx,
     buf[(*idx)++]=u3; buf[(*idx)++]=v3;
 }
 
-static void build_chunk_vbo(struct chunk* ch) {
+static void rebuild_vbo(struct engine* eng) {
+    update_faces(eng);
+
     int fc = 0;
-    for (int x = 0; x < CHUNK_SIZE; x++)
+    for (int x = 0; x < WORLD_BUF; x++)
         for (int y = 0; y < CHUNK_H; y++)
-            for (int z = 0; z < CHUNK_SIZE; z++) {
-                unsigned char f = ch->faces[x][y][z];
+            for (int z = 0; z < WORLD_BUF; z++) {
+                unsigned char f = eng->faces[x][y][z];
                 if (f & FACE_XP) fc++;
                 if (f & FACE_XN) fc++;
                 if (f & FACE_YP) fc++;
@@ -40,29 +77,27 @@ static void build_chunk_vbo(struct chunk* ch) {
                 if (f & FACE_ZN) fc++;
             }
 
-    ch->faceCount = fc;
-    if (fc == 0) {
-        ch->meshDirty = false;
-        return;
-    }
+    eng->visibleFaceCount = fc;
+    if (fc == 0) { eng->meshDirty = false; return; }
 
     int cnt = fc * 6 * 5;
     float* buf = (float*)malloc((size_t)cnt * sizeof(float));
     if (!buf) return;
     int idx = 0;
 
-    float ox = (float)(ch->cx * CHUNK_SIZE);
-    float oz = (float)(-(ch->cz * CHUNK_SIZE));
+    /* Смещение: буферный (0,0) = мировой (loadCenterX - LOAD_RADIUS, loadCenterZ - LOAD_RADIUS) */
+    int ox = eng->loadCenterX - LOAD_RADIUS;
+    int oz = eng->loadCenterZ - LOAD_RADIUS;
 
-    for (int x = 0; x < CHUNK_SIZE; x++)
+    for (int x = 0; x < WORLD_BUF; x++)
         for (int y = 0; y < CHUNK_H; y++)
-            for (int z = 0; z < CHUNK_SIZE; z++) {
-                unsigned char f = ch->faces[x][y][z];
+            for (int z = 0; z < WORLD_BUF; z++) {
+                unsigned char f = eng->faces[x][y][z];
                 if (!f) continue;
 
-                float bx = ox + (float)x;
+                float bx = (float)(ox + x);
                 float by = (float)y;
-                float bz = oz - (float)z;
+                float bz = (float)(-(oz + z));
 
                 float x0 = bx-0.5f, x1 = bx+0.5f;
                 float y0 = by-0.5f, y1 = by+0.5f;
@@ -70,12 +105,12 @@ static void build_chunk_vbo(struct chunk* ch) {
 
                 if (f & FACE_XP)
                     push_quad(buf,&idx,
-                        x1,y0,z0,0,0, x1,y0,z1,1,0,
-                        x1,y1,z1,1,1, x1,y1,z0,0,1);
+                        x1,y0,z0,0,1, x1,y0,z1,1,1,
+                        x1,y1,z1,1,0, x1,y1,z0,0,0);
                 if (f & FACE_XN)
                     push_quad(buf,&idx,
-                        x0,y0,z1,0,0, x0,y0,z0,1,0,
-                        x0,y1,z0,1,1, x0,y1,z1,0,1);
+                        x0,y0,z1,0,1, x0,y0,z0,1,1,
+                        x0,y1,z0,1,0, x0,y1,z1,0,0);
                 if (f & FACE_YP)
                     push_quad(buf,&idx,
                         x0,y1,z1,0,0, x1,y1,z1,1,0,
@@ -86,27 +121,35 @@ static void build_chunk_vbo(struct chunk* ch) {
                         x1,y0,z1,1,1, x0,y0,z1,0,1);
                 if (f & FACE_ZP)
                     push_quad(buf,&idx,
-                        x1,y0,z0,0,0, x0,y0,z0,1,0,
-                        x0,y1,z0,1,1, x1,y1,z0,0,1);
+                        x1,y0,z0,0,1, x0,y0,z0,1,1,
+                        x0,y1,z0,1,0, x1,y1,z0,0,0);
                 if (f & FACE_ZN)
                     push_quad(buf,&idx,
-                        x0,y0,z1,0,0, x1,y0,z1,1,0,
-                        x1,y1,z1,1,1, x0,y1,z1,0,1);
+                        x0,y0,z1,0,1, x1,y0,z1,1,1,
+                        x1,y1,z1,1,0, x0,y1,z1,0,0);
             }
 
-    if (!ch->vbo) glGenBuffers(1, &ch->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, ch->vbo);
+    if (!eng->vbo) glGenBuffers(1, &eng->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
     glBufferData(GL_ARRAY_BUFFER,
                  (GLsizeiptr)(cnt * sizeof(float)),
                  buf, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     free(buf);
-    ch->meshDirty = false;
+    eng->meshDirty = false;
 }
 
 static void render_world(struct engine* eng) {
+    if (eng->meshDirty) rebuild_vbo(eng);
+    if (eng->visibleFaceCount == 0) return;
+
     glEnable(GL_DEPTH_TEST);
     glUseProgram(eng->program);
+
+    /* Текстура */
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, eng->texture);
+    glUniform1i(glGetUniformLocation(eng->program, "tex"), 0);
 
     float proj[16], view[16], mvp[16];
     mat4_perspective(proj, GAME_FOV,
@@ -118,19 +161,12 @@ static void render_world(struct engine* eng) {
     glUniformMatrix4fv(glGetUniformLocation(eng->program, "m"),
                        1, GL_FALSE, mvp);
 
-    for (int i = 0; i < MAX_CHUNKS; i++) {
-        struct chunk* ch = &eng->chunks[i];
-        if (!ch->active) continue;
-        if (ch->meshDirty) build_chunk_vbo(ch);
-        if (ch->faceCount == 0 || !ch->vbo) continue;
-
-        glBindBuffer(GL_ARRAY_BUFFER, ch->vbo);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, (void*)0);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, (void*)12);
-        glEnableVertexAttribArray(1);
-        glDrawArrays(GL_TRIANGLES, 0, ch->faceCount * 6);
-    }
+    glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, (void*)12);
+    glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLES, 0, eng->visibleFaceCount * 6);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
