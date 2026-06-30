@@ -21,9 +21,9 @@ static float smooth_noise(float fx, float fz) {
     float dx = fx - ix;
     float dz = fz - iz;
     float v00 = noise2d(ix, iz);
-    float v10 = noise2d(ix+1, iz);
-    float v01 = noise2d(ix, iz+1);
-    float v11 = noise2d(ix+1, iz+1);
+    float v10 = noise2d(ix + 1, iz);
+    float v01 = noise2d(ix, iz + 1);
+    float v11 = noise2d(ix + 1, iz + 1);
     float i0 = v00 + (v10 - v00) * dx;
     float i1 = v01 + (v11 - v01) * dx;
     return i0 + (i1 - i0) * dz;
@@ -65,7 +65,6 @@ static int buf_block(struct engine* eng, int bx, int by, int bz) {
     return eng->blocks[bx][by][bz];
 }
 
-/* Мировые -> буферные */
 static void world_to_buf(struct engine* eng, int wx, int wy, int wz,
                           int* bx, int* by, int* bz) {
     *bx = wx - eng->loadCenterX + LOAD_RADIUS;
@@ -79,8 +78,8 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
     return buf_block(eng, bx, by, bz);
 }
 
-/* Установить блок по мировым координатам */
-static void world_set_block(struct engine* eng, int wx, int wy, int wz, unsigned char val) {
+static void world_set_block(struct engine* eng, int wx, int wy, int wz,
+                             unsigned char val) {
     int bx, by, bz;
     world_to_buf(eng, wx, wy, wz, &bx, &by, &bz);
     if (by < 0 || by >= CHUNK_H) return;
@@ -98,12 +97,12 @@ static void update_faces(struct engine* eng) {
                     continue;
                 }
                 unsigned char f = 0;
-                if (!buf_block(eng, x+1, y, z)) f |= FACE_XP;
-                if (!buf_block(eng, x-1, y, z)) f |= FACE_XN;
-                if (!buf_block(eng, x, y+1, z)) f |= FACE_YP;
-                if (!buf_block(eng, x, y-1, z)) f |= FACE_YN;
-                if (!buf_block(eng, x, y, z+1)) f |= FACE_ZP;
-                if (!buf_block(eng, x, y, z-1)) f |= FACE_ZN;
+                if (!buf_block(eng, x + 1, y, z)) f |= FACE_XP;
+                if (!buf_block(eng, x - 1, y, z)) f |= FACE_XN;
+                if (!buf_block(eng, x, y + 1, z)) f |= FACE_YP;
+                if (!buf_block(eng, x, y - 1, z)) f |= FACE_YN;
+                if (!buf_block(eng, x, y, z + 1)) f |= FACE_ZP;
+                if (!buf_block(eng, x, y, z - 1)) f |= FACE_ZN;
                 eng->faces[x][y][z] = f;
             }
 }
@@ -121,39 +120,57 @@ static void update_world(struct engine* eng) {
         load_blocks_around(eng, px, pz);
 }
 
-/* Raycast — луч из камеры, возвращает hit и предыдущую позицию */
+/*
+ * Конвертация позиции в мире (float) -> координаты блока (int)
+ * Камера: x = мировой x, z = -мировой_wz
+ * Блок (wx, wy, wz): рендерится в (wx, wy, -wz)
+ * Значит: wx = floor(camX), wz = floor(-camZ)
+ */
+static void cam_to_world_block(float cx, float cy, float cz,
+                                int* wx, int* wy, int* wz) {
+    *wx = (int)floorf(cx);
+    *wy = (int)floorf(cy);
+    *wz = (int)floorf(-cz);
+}
+
+/* Raycast из камеры */
 static bool raycast(struct engine* eng,
                     int* hitX, int* hitY, int* hitZ,
                     int* prevX, int* prevY, int* prevZ) {
     float pitch = eng->camRot[0];
     float yaw = eng->camRot[1];
+
+    /* Направление взгляда */
     float dirX = -sinf(yaw) * cosf(pitch);
     float dirY = -sinf(pitch);
     float dirZ = cosf(yaw) * cosf(pitch);
 
-    float rx = eng->camPos[0];
-    float ry = eng->camPos[1];
-    float rz = eng->camPos[2];
+    int lx = -9999, ly = -9999, lz = -9999;
 
-    int lbx = -999, lby = -999, lbz = -999;
+    for (float t = 0.0f; t < RAY_DIST; t += RAY_STEP) {
+        float px = eng->camPos[0] + dirX * t;
+        float py = eng->camPos[1] + dirY * t;
+        float pz = eng->camPos[2] + dirZ * t;
 
-    for (float t = 0; t < RAY_DIST; t += RAY_STEP) {
-        float px = rx + dirX * t;
-        float py = ry + dirY * t;
-        float pz = rz + dirZ * t;
+        int wx, wy, wz;
+        cam_to_world_block(px, py, pz, &wx, &wy, &wz);
 
-        int wx = (int)floorf(px + 0.5f);
-        int wy = (int)floorf(py + 0.5f);
-        int wz = (int)floorf(-pz + 0.5f);
-
-        if (wx == lbx && wy == lby && wz == lbz) continue;
+        if (wx == lx && wy == ly && wz == lz)
+            continue;
 
         if (world_block_at(eng, wx, wy, wz) > 0) {
-            *hitX = wx; *hitY = wy; *hitZ = wz;
-            *prevX = lbx; *prevY = lby; *prevZ = lbz;
+            *hitX = wx;
+            *hitY = wy;
+            *hitZ = wz;
+            *prevX = lx;
+            *prevY = ly;
+            *prevZ = lz;
             return true;
         }
-        lbx = wx; lby = wy; lbz = wz;
+
+        lx = wx;
+        ly = wy;
+        lz = wz;
     }
     return false;
 }
@@ -161,30 +178,40 @@ static bool raycast(struct engine* eng,
 static void break_block(struct engine* eng) {
     int hx, hy, hz, px, py, pz;
     if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
-        if (hy > 0)
-            world_set_block(eng, hx, hy, hz, 0);
+        /* Не ломаем самый нижний слой */
+        if (hy <= 0) return;
+        world_set_block(eng, hx, hy, hz, 0);
     }
 }
 
 static void place_block(struct engine* eng) {
     int hx, hy, hz, px, py, pz;
-    if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
-        if (px == -999) return;
-        if (py < 0 || py >= CHUNK_H) return;
+    if (!raycast(eng, &hx, &hy, &hz, &px, &py, &pz))
+        return;
 
-        /* Не ставить внутри игрока */
-        float bx = (float)px;
-        float bz = (float)(-pz);
-        float by = (float)py;
-        float foot = eng->camPos[1] - EYE_H;
+    /* prevX/Y/Z — пустой блок рядом с hit */
+    if (px == -9999) return;
+    if (py < 0 || py >= CHUNK_H) return;
 
-        if (fabsf(eng->camPos[0] - bx) < (PLAYER_W + 0.5f) &&
-            fabsf(eng->camPos[2] - bz) < (PLAYER_W + 0.5f) &&
-            by + 0.5f > foot && by - 0.5f < eng->camPos[1] + HEAD_MARGIN)
-            return;
+    /* Проверка что не ставим внутри игрока */
+    /* Позиция блока в мире рендера: (px, py, -pz) */
+    float blockRenderX = (float)px + 0.5f;
+    float blockRenderY = (float)py + 0.5f;
+    float blockRenderZ = -(float)pz - 0.5f;
 
-        world_set_block(eng, px, py, pz, 1);
-    }
+    float footY = eng->camPos[1] - EYE_H;
+    float headY = eng->camPos[1] + HEAD_MARGIN;
+
+    /* AABB пересечение */
+    bool overlapX = fabsf(eng->camPos[0] - blockRenderX) < (PLAYER_W + 0.5f);
+    bool overlapZ = fabsf(eng->camPos[2] - blockRenderZ) < (PLAYER_W + 0.5f);
+    bool overlapY = (blockRenderY + 0.5f > footY) &&
+                    (blockRenderY - 0.5f < headY);
+
+    if (overlapX && overlapY && overlapZ)
+        return;
+
+    world_set_block(eng, px, py, pz, 1);
 }
 
 #endif
