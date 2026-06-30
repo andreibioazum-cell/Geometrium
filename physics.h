@@ -49,16 +49,17 @@ static bool check_inside(float x, float eyeY, float z) {
 }
 
 static void apply_physics(struct engine* eng) {
-    eng->velY -= 0.012f;
-    if (eng->velY < -0.5f) eng->velY = -0.5f;
+    /* Лунная гравитация — медленное падение */
+    eng->velY -= GRAVITY;
+    if (eng->velY < TERM_VEL) eng->velY = TERM_VEL;
 
-    float nextY = eng->camPos[1] + eng->velY;
+    float nextY    = eng->camPos[1] + eng->velY;
     float nextFoot = nextY - EYE_H;
     float nextHead = nextY + HEAD_MARGIN;
 
     eng->onGround = false;
 
-    /* Также проверяем "почти на земле" для надёжного прыжка */
+    /* Проверяем землю в текущей позиции тоже — для надёжного прыжка */
     if (check_ground(eng->camPos[0], eng->camPos[1] - EYE_H, eng->camPos[2])) {
         eng->onGround = true;
     }
