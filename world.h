@@ -6,8 +6,10 @@
 #include "engine.h"
 #include "math_utils.h"
 
+static unsigned int game_seed = 0;
+
 static unsigned int hash2d(int x, int z) {
-    unsigned int h = (unsigned int)(x * 374761393 + z * 668265263);
+    unsigned int h = (unsigned int)(x * 374761393 + z * 668265263 + game_seed * 1103515245);
     h = (h ^ (h >> 13)) * 1274126177u;
     return h ^ (h >> 16);
 }
@@ -50,15 +52,13 @@ static int get_height(int wx, int wz) {
     return height;
 }
 
-static void pos_to_block(float rx, float ry, float rz,
-                         int* wx, int* wy, int* wz) {
+static void pos_to_block(float rx, float ry, float rz, int* wx, int* wy, int* wz) {
     *wx = (int)floorf(rx + 0.5f);
     *wy = (int)floorf(ry + 0.5f);
     *wz = (int)floorf(-rz + 0.5f);
 }
 
-static void world_to_buf(struct engine* eng, int wx, int wz,
-                          int* bx, int* bz) {
+static void world_to_buf(struct engine* eng, int wx, int wz, int* bx, int* bz) {
     *bx = wx - eng->loadCenterX + LOAD_RADIUS;
     *bz = wz - eng->loadCenterZ + LOAD_RADIUS;
 }
@@ -100,8 +100,7 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
     eng->meshDirty = true;
 }
 
-static void world_set_block(struct engine* eng, int wx, int wy, int wz,
-                             unsigned char val) {
+static void world_set_block(struct engine* eng, int wx, int wy, int wz, unsigned char val) {
     if (wy < 0 || wy >= CHUNK_H) return;
     int bx, bz;
     world_to_buf(eng, wx, wz, &bx, &bz);
@@ -109,9 +108,7 @@ static void world_set_block(struct engine* eng, int wx, int wy, int wz,
     eng->blocks[bx][wy][bz] = val;
     for (int i = 0; i < eng->editCount; i++) {
         if (eng->edits[i].wx == wx && eng->edits[i].wy == wy && eng->edits[i].wz == wz) {
-            eng->edits[i].val = val;
-            eng->meshDirty = true;
-            return;
+            eng->edits[i].val = val; eng->meshDirty = true; return;
         }
     }
     if (eng->editCount < MAX_EDITS) {
@@ -162,7 +159,7 @@ static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ,
     int lx=-9999,ly=-9999,lz=-9999;
     for (float t=0.1f; t<RAY_DIST; t+=RAY_STEP) {
         int wx,wy,wz;
-        pos_to_block(eng->camPos[0]+dx*t, eng->camPos[1]+dy*t, eng->camPos[2]+dz*t, &wx,&wy,&wz);
+        pos_to_block(eng->camPos[0]+dx*t,eng->camPos[1]+dy*t,eng->camPos[2]+dz*t,&wx,&wy,&wz);
         if (wx==lx&&wy==ly&&wz==lz) continue;
         if (world_block_at(eng,wx,wy,wz)>0) {
             *hitX=wx;*hitY=wy;*hitZ=wz;*prevX=lx;*prevY=ly;*prevZ=lz; return true;
@@ -173,18 +170,13 @@ static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ,
 }
 
 static void inv_add_block(struct engine* eng, unsigned char type) {
-    for (int i = 0; i < INV_SLOTS; i++) {
-        if (eng->invSlots[i] == BLOCK_AIR) {
-            eng->invSlots[i] = type;
-            return;
-        }
-    }
+    for (int i = 0; i < INV_SLOTS; i++)
+        if (eng->invSlots[i] == BLOCK_AIR) { eng->invSlots[i] = type; return; }
 }
 
 static bool inv_use_block(struct engine* eng) {
     if (eng->invSlots[eng->selectedSlot] == BLOCK_AIR) return false;
-    eng->invSlots[eng->selectedSlot] = BLOCK_AIR;
-    return true;
+    eng->invSlots[eng->selectedSlot] = BLOCK_AIR; return true;
 }
 
 static void start_block_anim(struct engine* eng, int wx, int wy, int wz, bool breaking) {
@@ -193,10 +185,8 @@ static void start_block_anim(struct engine* eng, int wx, int wy, int wz, bool br
     eng->animBlockY = (float)wy;
     eng->animBlockZ = -(float)wz;
     eng->animIsBreak = breaking;
-    if (breaking)
-        eng->animBreakTimer = ANIM_BREAK_FRAMES;
-    else
-        eng->animPlaceTimer = ANIM_PLACE_FRAMES;
+    if (breaking) eng->animBreakTimer = ANIM_BREAK_FRAMES;
+    else eng->animPlaceTimer = ANIM_PLACE_FRAMES;
 }
 
 static void break_block(struct engine* eng) {
