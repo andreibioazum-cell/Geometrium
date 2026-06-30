@@ -33,7 +33,7 @@
 
 #define LOAD_RADIUS     32
 #define WORLD_BUF       (LOAD_RADIUS * 2 + 1)
-#define CHUNK_H         10
+#define CHUNK_H         32
 
 #define FACE_XP 0x01
 #define FACE_XN 0x02
@@ -45,8 +45,22 @@
 #define RAY_DIST        6.0f
 #define RAY_STEP        0.02f
 
-/* Максимум сохранённых изменений блоков */
 #define MAX_EDITS       512
+
+/* Типы блоков */
+#define BLOCK_AIR       0
+#define BLOCK_GRASS     1
+#define BLOCK_DIRT      2
+#define BLOCK_STONE     3
+#define BLOCK_SAND      4
+#define BLOCK_SNOW      5
+#define BLOCK_COUNT     6
+
+/* Инвентарь */
+#define INV_SLOTS       5
+#define INV_SLOT_SIZE   50.0f
+#define INV_PADDING     8.0f
+#define INV_Y_OFFSET    60.0f
 
 struct block_edit {
     int wx, wy, wz;
@@ -60,7 +74,9 @@ struct engine {
     EGLContext context;
     int32_t width, height;
     GLuint program;
-    GLuint texture;
+    GLuint texTop[BLOCK_COUNT];
+    GLuint texSide[BLOCK_COUNT];
+    GLuint texBottom[BLOCK_COUNT];
 
     float camPos[3];
     float camRot[2];
@@ -85,9 +101,12 @@ struct engine {
     unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
     unsigned char faces[WORLD_BUF][CHUNK_H][WORLD_BUF];
 
-    /* Сохранённые изменения блоков */
     struct block_edit edits[MAX_EDITS];
     int editCount;
+
+    /* Инвентарь */
+    unsigned char invSlots[INV_SLOTS];
+    int selectedSlot;
 };
 
 #endif
