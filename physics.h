@@ -48,12 +48,11 @@ static void apply_physics(struct engine* eng) {
     eng->velY -= GRAVITY;
     if (eng->velY < TERM_VEL) eng->velY = TERM_VEL;
 
-    float nextY    = eng->camPos[1] + eng->velY;
+    float nextY = eng->camPos[1] + eng->velY;
     float nextFoot = nextY - EYE_H;
     float nextHead = nextY + HEAD_MARGIN;
 
     eng->onGround = false;
-
     if (check_ground(eng, eng->camPos[0], eng->camPos[1]-EYE_H, eng->camPos[2]))
         eng->onGround = true;
 
@@ -65,11 +64,10 @@ static void apply_physics(struct engine* eng) {
             eng->camPos[1] = nextY;
         }
     } else {
-        if (check_ceiling(eng, eng->camPos[0], nextHead, eng->camPos[2])) {
+        if (check_ceiling(eng, eng->camPos[0], nextHead, eng->camPos[2]))
             eng->velY = 0;
-        } else {
+        else
             eng->camPos[1] = nextY;
-        }
     }
 
     if (eng->isMoving && (eng->moveDirX != 0 || eng->moveDirZ != 0)) {
@@ -79,7 +77,6 @@ static void apply_physics(struct engine* eng) {
         float rX = cosf(yaw), rZ = sinf(yaw);
         float dx = (fX * -eng->moveDirZ + rX * eng->moveDirX) * speed;
         float dz = (fZ * -eng->moveDirZ + rZ * eng->moveDirX) * speed;
-
         if (!check_wall(eng, eng->camPos[0]+dx, eng->camPos[1], eng->camPos[2]))
             eng->camPos[0] += dx;
         if (!check_wall(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2]+dz))
