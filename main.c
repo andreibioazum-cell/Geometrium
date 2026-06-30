@@ -9,11 +9,10 @@
 #include "input.h"
 #include "render.h"
 
-unsigned char map[WORLD_SIZE][CHUNK_H][WORLD_SIZE];
-unsigned char face_vis[WORLD_SIZE][CHUNK_H][WORLD_SIZE];
-
 static void engine_draw_frame(struct engine* eng) {
     if (!eng->display) return;
+
+    update_chunks(eng);
     apply_physics(eng);
 
     eglQuerySurface(eng->display, eng->surface, EGL_WIDTH, &eng->width);
@@ -75,7 +74,6 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         glDeleteShader(fs);
 
         init_ui_shader();
-        rebuild_world_vbo(eng);
     }
 }
 
@@ -83,12 +81,19 @@ void android_main(struct android_app* state) {
     struct engine eng = {0};
     eng.movePointerId = -1;
     eng.lookPointerId = -1;
+    eng.chunksReady = false;
+    eng.lastChunkX = 99999;
+    eng.lastChunkZ = 99999;
 
-    generate_world();
-    eng.camPos[0] = WORLD_SIZE / 2.0f;
-    eng.camPos[2] = -(WORLD_SIZE / 2.0f);
-    eng.camPos[1] = get_spawn_y((int)eng.camPos[0],
-                                 (int)(-eng.camPos[2]));
+    for (int i = 0; i < MAX_CHUNKS; i++) {
+        eng.chunks[i].active = false;
+        eng.chunks[i].vbo = 0;
+    }
+
+    /* Спавн в центре мира (0,0) */
+    eng.camPos[0] = 0.5f;
+    eng.camPos[2] = -0.5f;
+    eng.camPos[1] = (float)get_height(0, 0) + 2.5f;
 
     state->userData = &eng;
     state->onAppCmd = engine_handle_cmd;
