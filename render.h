@@ -55,7 +55,6 @@ static void init_textures(struct engine* eng) {
     if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
 }
 
-/* 8 floats: x y z u v nx ny nz */
 static void push_quad_n(float* buf, int* idx,
     float x0,float y0,float z0, float u0,float v0,
     float x1,float y1,float z1, float u1,float v1,
@@ -73,7 +72,6 @@ static void push_quad_n(float* buf, int* idx,
 
 static void rebuild_vbo(struct engine* eng) {
     update_faces(eng);
-
     int fc = 0;
     for (int x = 0; x < WORLD_BUF; x++)
         for (int y = 0; y < CHUNK_H; y++)
@@ -83,7 +81,6 @@ static void rebuild_vbo(struct engine* eng) {
                 if (f & FACE_YP) fc++; if (f & FACE_YN) fc++;
                 if (f & FACE_ZP) fc++; if (f & FACE_ZN) fc++;
             }
-
     eng->visibleFaceCount = fc;
     if (fc == 0) { eng->meshDirty = false; return; }
 
@@ -91,7 +88,6 @@ static void rebuild_vbo(struct engine* eng) {
     float* buf = (float*)malloc((size_t)cnt * sizeof(float));
     if (!buf) return;
     int idx = 0;
-
     int ox = eng->loadCenterX - LOAD_RADIUS;
     int oz = eng->loadCenterZ - LOAD_RADIUS;
 
@@ -100,9 +96,8 @@ static void rebuild_vbo(struct engine* eng) {
             for (int z = 0; z < WORLD_BUF; z++) {
                 unsigned char f = eng->faces[x][y][z];
                 if (!f) continue;
-                float bx = (float)(ox+x), by = (float)y, bz = (float)(-(oz+z));
+                float bx=(float)(ox+x),by=(float)y,bz=(float)(-(oz+z));
                 float x0=bx-0.5f,x1=bx+0.5f,y0=by-0.5f,y1=by+0.5f,z0=bz-0.5f,z1=bz+0.5f;
-
                 if(f&FACE_XP) push_quad_n(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0, 1,0,0);
                 if(f&FACE_XN) push_quad_n(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0);
                 if(f&FACE_YP) push_quad_n(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1, 0,1,0);
@@ -125,18 +120,15 @@ static void render_world(struct engine* eng) {
 
     glEnable(GL_DEPTH_TEST);
     glUseProgram(eng->program);
-
     glUniform3f(glGetUniformLocation(eng->program, "camPos"),
                 eng->camPos[0], eng->camPos[1], eng->camPos[2]);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, eng->texGrassTop);
     glUniform1i(glGetUniformLocation(eng->program, "texTop"), 0);
-
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
     glUniform1i(glGetUniformLocation(eng->program, "texSide"), 1);
-
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, eng->texGrassDown);
     glUniform1i(glGetUniformLocation(eng->program, "texDown"), 2);
@@ -198,45 +190,155 @@ static void draw_rect(float cx,float cy,float hw,float hh,int sw,int sh,float cr
     glDrawArrays(GL_TRIANGLES,0,6);
 }
 
+static void update_animations(struct engine* eng) {
+    if (eng->animBreakTimer > 0) {
+        eng->animBreakTimer--;
+        float t = (float)eng->animBreakTimer / ANIM_BREAK_TIME;
+        eng->animHandAngle = sinf(t * PI * 2) * 25.0f;
+    } else if (eng->animPlaceTimer > 0) {
+        eng->animPlaceTimer--;
+        float t = (float)eng->animPlaceTimer / ANIM_PLACE_TIME;
+        eng->animHandAngle = sinf(t * PI) * 15.0f;
+    } else {
+        eng->animHandAngle = 0;
+    }
+}
+
+/* Рисуем руку в правом нижнем углу */
+static void draw_hand(struct engine* eng) {
+    int sw = eng->width, sh = eng->height;
+    float handX = sw * 0.75f;
+    float handY = sh * 0.85f;
+    float handW = 18.0f;
+    float handH = 50.0f;
+    float angle = eng->animHandAngle;
+
+    /* Поворот руки вокруг нижней точки */
+    float rad = angle * PI / 180.0f;
+    float cosA = cosf(rad), sinA = sinf(rad);
+
+    /* 4 угла прямоугольника руки до поворота (относительно низа) */
+    float corners[4][2] = {
+        {-handW, -handH*2}, { handW, -handH*2},
+        { handW, 0},        {-handW, 0}
+    };
+
+    float ndc[4][2];
+    for (int i = 0; i < 4; i++) {
+        float rx = corners[i][0] * cosA - corners[i][1] * sinA;
+        float ry = corners[i][0] * sinA + corners[i][1] * cosA;
+        ndc[i][0] = ((handX + rx) / sw) * 2.0f - 1.0f;
+        ndc[i][1] = 1.0f - ((handY + ry) / sh) * 2.0f;
+    }
+
+    /* Рука — бежевый цвет */
+    float verts[] = {
+        ndc[0][0],ndc[0][1], ndc[1][0],ndc[1][1], ndc[2][0],ndc[2][1],
+        ndc[0][0],ndc[0][1], ndc[2][0],ndc[2][1], ndc[3][0],ndc[3][1]
+    };
+    glUseProgram(uiProg);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 0.87f, 0.72f, 0.53f, 1.0f);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
+    glEnableVertexAttribArray(0);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    /* Обводка руки */
+    float outW = handW + 2, outH = handH * 2 + 2;
+    float oc[4][2] = {
+        {-outW, -outH}, { outW, -outH},
+        { outW, 2},     {-outW, 2}
+    };
+    float ondc[4][2];
+    for (int i = 0; i < 4; i++) {
+        float rx = oc[i][0] * cosA - oc[i][1] * sinA;
+        float ry = oc[i][0] * sinA + oc[i][1] * cosA;
+        ondc[i][0] = ((handX + rx) / sw) * 2.0f - 1.0f;
+        ondc[i][1] = 1.0f - ((handY + ry) / sh) * 2.0f;
+    }
+    float ov[] = {
+        ondc[0][0],ondc[0][1], ondc[1][0],ondc[1][1], ondc[2][0],ondc[2][1],
+        ondc[0][0],ondc[0][1], ondc[2][0],ondc[2][1], ondc[3][0],ondc[3][1]
+    };
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 0.6f, 0.45f, 0.3f, 0.6f);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, ov);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
 static void draw_ui(struct engine* eng) {
-    int sw=eng->width, sh=eng->height;
-    glDisable(GL_DEPTH_TEST); glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    int sw = eng->width, sh = eng->height;
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    update_animations(eng);
+
+    /* Рука */
+    draw_hand(eng);
 
     /* Прицел */
-    float ccx=sw/2.0f, ccy=sh/2.0f;
-    draw_rect(ccx,ccy,10,1.5f,sw,sh,1,1,1,1);
-    draw_rect(ccx,ccy,1.5f,10,sw,sh,1,1,1,1);
+    float ccx = sw / 2.0f, ccy = sh / 2.0f;
+    draw_rect(ccx, ccy, 10, 1.5f, sw, sh, 1, 1, 1, 1);
+    draw_rect(ccx, ccy, 1.5f, 10, sw, sh, 1, 1, 1, 1);
 
     /* Джойстик */
-    float jx=JOY_X_OFFSET, jy=sh-JOY_Y_OFFSET;
-    draw_ring(jx,jy,JOY_RADIUS,3,sw,sh,0,0,0,1);
-    draw_circle(jx+eng->moveDirX*JOY_RADIUS*0.6f,jy+eng->moveDirZ*JOY_RADIUS*0.6f,
-                STICK_RADIUS,sw,sh,0,0,0,1);
+    float jx = JOY_X_OFFSET, jy = sh - JOY_Y_OFFSET;
+    draw_ring(jx, jy, JOY_RADIUS, 3, sw, sh, 0, 0, 0, 1);
+    draw_circle(jx + eng->moveDirX * JOY_RADIUS * 0.6f,
+                jy + eng->moveDirZ * JOY_RADIUS * 0.6f,
+                STICK_RADIUS, sw, sh, 0, 0, 0, 1);
 
     /* Прыжок */
-    float bx=sw-JUMP_BTN_OFFSET, by=sh-JUMP_BTN_OFFSET;
-    draw_ring(bx,by,JUMP_BTN_SIZE,3,sw,sh,0,0,0,1);
-    float as=JUMP_BTN_SIZE*0.3f;
-    float anx=(bx/sw)*2-1,any=1-(by/sh)*2,aax=(as/sw)*2,aay=(as/sh)*2;
-    float arrow[]={anx,any+aay,anx-aax,any-aay*0.5f,anx+aax,any-aay*0.5f};
-    glUseProgram(uiProg);glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow);glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES,0,3);
+    float bx = sw - JUMP_BTN_OFFSET, by = sh - JUMP_BTN_OFFSET;
+    draw_ring(bx, by, JUMP_BTN_SIZE, 3, sw, sh, 0, 0, 0, 1);
+    float as = JUMP_BTN_SIZE * 0.3f;
+    float anx = (bx / sw) * 2 - 1, any = 1 - (by / sh) * 2;
+    float aax = (as / sw) * 2, aay = (as / sh) * 2;
+    float arrow[] = {anx, any + aay, anx - aax, any - aay * 0.5f, anx + aax, any - aay * 0.5f};
+    glUseProgram(uiProg);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 0, 0, 0, 1);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, arrow);
+    glEnableVertexAttribArray(0);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 
     /* Ломание */
-    float bbx=sw-BREAK_BTN_X, bby=BREAK_BTN_Y;
-    draw_ring(bbx,bby,ACTION_BTN_SIZE,3,sw,sh,0,0,0,1);
-    draw_rect(bbx,bby,ACTION_BTN_SIZE*0.28f,2.5f,sw,sh,0,0,0,1);
-    draw_rect(bbx,bby,2.5f,ACTION_BTN_SIZE*0.28f,sw,sh,0,0,0,1);
+    float bbx = sw - BREAK_BTN_X, bby = BREAK_BTN_Y;
+    draw_ring(bbx, bby, ACTION_BTN_SIZE, 3, sw, sh, 0, 0, 0, 1);
+    draw_rect(bbx, bby, ACTION_BTN_SIZE * 0.28f, 2.5f, sw, sh, 0, 0, 0, 1);
+    draw_rect(bbx, bby, 2.5f, ACTION_BTN_SIZE * 0.28f, sw, sh, 0, 0, 0, 1);
 
     /* Ставление */
-    float pbx=sw-PLACE_BTN_X, pby=PLACE_BTN_Y;
-    draw_ring(pbx,pby,ACTION_BTN_SIZE,3,sw,sh,0,0,0,1);
-    draw_rect(pbx,pby,ACTION_BTN_SIZE*0.3f,2.5f,sw,sh,0,0,0,1);
-    draw_rect(pbx,pby,2.5f,ACTION_BTN_SIZE*0.3f,sw,sh,0,0,0,1);
+    float pbx = sw - PLACE_BTN_X, pby = PLACE_BTN_Y;
+    draw_ring(pbx, pby, ACTION_BTN_SIZE, 3, sw, sh, 0, 0, 0, 1);
+    draw_rect(pbx, pby, ACTION_BTN_SIZE * 0.3f, 2.5f, sw, sh, 0, 0, 0, 1);
+    draw_rect(pbx, pby, 2.5f, ACTION_BTN_SIZE * 0.3f, sw, sh, 0, 0, 0, 1);
 
-    glDisable(GL_BLEND); glEnable(GL_DEPTH_TEST);
+    /* Инвентарь */
+    float invW = INV_SLOTS * (INV_SLOT_SIZE + INV_PADDING) - INV_PADDING;
+    float invStartX = (sw - invW) / 2.0f;
+    float invY = sh - INV_Y_OFFSET;
+
+    for (int i = 0; i < INV_SLOTS; i++) {
+        float slotX = invStartX + i * (INV_SLOT_SIZE + INV_PADDING) + INV_SLOT_SIZE / 2.0f;
+        float hs = INV_SLOT_SIZE / 2.0f;
+
+        /* Выделение выбранного */
+        if (i == eng->selectedSlot)
+            draw_rect(slotX, invY, hs + 3, hs + 3, sw, sh, 1, 1, 1, 0.6f);
+
+        /* Фон слота */
+        draw_rect(slotX, invY, hs, hs, sw, sh, 0.15f, 0.15f, 0.15f, 0.7f);
+
+        /* Блок внутри */
+        if (eng->invSlots[i] == BLOCK_GRASS)
+            draw_rect(slotX, invY, hs - 5, hs - 5, sw, sh, 0.39f, 0.7f, 0.23f, 1);
+
+        /* Обводка */
+        float bc = (i == eng->selectedSlot) ? 1.0f : 0.4f;
+        draw_ring(slotX, invY, hs, 2, sw, sh, bc, bc, bc, 1);
+    }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
 }
 
 #endif
