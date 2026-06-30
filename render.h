@@ -35,7 +35,6 @@ static GLuint load_texture(struct android_app* app, const char* filename) {
     return tex;
 }
 
-/* Создать одноцветную текстуру 1x1 */
 static GLuint make_color_tex(unsigned char r, unsigned char g, unsigned char b) {
     unsigned char px[4] = {r, g, b, 255};
     GLuint tex;
@@ -47,63 +46,29 @@ static GLuint make_color_tex(unsigned char r, unsigned char g, unsigned char b) 
     return tex;
 }
 
-static void init_block_textures(struct engine* eng) {
-    /* Попытка загрузить текстуры из assets, fallback на цвета */
-    GLuint gt = load_texture(eng->app, "grass_top.png");
-    GLuint gs = load_texture(eng->app, "grass_side.png");
-    GLuint gb = load_texture(eng->app, "grass_bottom.png");
-    if (!gt) gt = make_color_tex(100, 180, 60);
-    if (!gs) gs = make_color_tex(120, 100, 70);
-    if (!gb) gb = make_color_tex(140, 110, 70);
-
-    GLuint dirt = make_color_tex(140, 110, 70);
-    GLuint stone = make_color_tex(128, 128, 128);
-    GLuint sand = make_color_tex(220, 210, 160);
-    GLuint snow = make_color_tex(240, 245, 255);
-
-    /* BLOCK_AIR = 0 — не используется */
-    eng->texTop[0] = eng->texSide[0] = eng->texBottom[0] = 0;
-
-    /* BLOCK_GRASS */
-    eng->texTop[BLOCK_GRASS] = gt;
-    eng->texSide[BLOCK_GRASS] = gs;
-    eng->texBottom[BLOCK_GRASS] = gb;
-
-    /* BLOCK_DIRT */
-    eng->texTop[BLOCK_DIRT] = dirt;
-    eng->texSide[BLOCK_DIRT] = dirt;
-    eng->texBottom[BLOCK_DIRT] = dirt;
-
-    /* BLOCK_STONE */
-    eng->texTop[BLOCK_STONE] = stone;
-    eng->texSide[BLOCK_STONE] = stone;
-    eng->texBottom[BLOCK_STONE] = stone;
-
-    /* BLOCK_SAND */
-    eng->texTop[BLOCK_SAND] = sand;
-    eng->texSide[BLOCK_SAND] = sand;
-    eng->texBottom[BLOCK_SAND] = sand;
-
-    /* BLOCK_SNOW */
-    eng->texTop[BLOCK_SNOW] = snow;
-    eng->texSide[BLOCK_SNOW] = snow;
-    eng->texBottom[BLOCK_SNOW] = snow;
+static void init_textures(struct engine* eng) {
+    eng->texGrassTop = load_texture(eng->app, "grass_top.png");
+    eng->texGrassSide = load_texture(eng->app, "grass_side.png");
+    eng->texGrassDown = load_texture(eng->app, "grass_down.png");
+    if (!eng->texGrassTop)  eng->texGrassTop  = make_color_tex(100, 180, 60);
+    if (!eng->texGrassSide) eng->texGrassSide = make_color_tex(120, 100, 70);
+    if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
 }
 
-/* 9 floats на вершину: x y z u v nx ny nz blockType */
+/* 8 floats: x y z u v nx ny nz */
 static void push_quad_n(float* buf, int* idx,
     float x0,float y0,float z0, float u0,float v0,
     float x1,float y1,float z1, float u1,float v1,
     float x2,float y2,float z2, float u2,float v2,
     float x3,float y3,float z3, float u3,float v3,
-    float nx,float ny,float nz, float bt) {
-    float vd[6][9] = {
-        {x0,y0,z0,u0,v0,nx,ny,nz,bt},{x1,y1,z1,u1,v1,nx,ny,nz,bt},
-        {x2,y2,z2,u2,v2,nx,ny,nz,bt},{x0,y0,z0,u0,v0,nx,ny,nz,bt},
-        {x2,y2,z2,u2,v2,nx,ny,nz,bt},{x3,y3,z3,u3,v3,nx,ny,nz,bt}
+    float nx,float ny,float nz) {
+    float vd[6][8] = {
+        {x0,y0,z0,u0,v0,nx,ny,nz},{x1,y1,z1,u1,v1,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz},{x0,y0,z0,u0,v0,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz},{x3,y3,z3,u3,v3,nx,ny,nz}
     };
     memcpy(&buf[*idx], vd, sizeof(vd));
-    *idx += 54;
+    *idx += 48;
 }
 
 static void rebuild_vbo(struct engine* eng) {
@@ -122,7 +87,7 @@ static void rebuild_vbo(struct engine* eng) {
     eng->visibleFaceCount = fc;
     if (fc == 0) { eng->meshDirty = false; return; }
 
-    int cnt = fc * 6 * 9;
+    int cnt = fc * 6 * 8;
     float* buf = (float*)malloc((size_t)cnt * sizeof(float));
     if (!buf) return;
     int idx = 0;
@@ -135,16 +100,15 @@ static void rebuild_vbo(struct engine* eng) {
             for (int z = 0; z < WORLD_BUF; z++) {
                 unsigned char f = eng->faces[x][y][z];
                 if (!f) continue;
-                float bt = (float)eng->blocks[x][y][z];
                 float bx = (float)(ox+x), by = (float)y, bz = (float)(-(oz+z));
                 float x0=bx-0.5f,x1=bx+0.5f,y0=by-0.5f,y1=by+0.5f,z0=bz-0.5f,z1=bz+0.5f;
 
-                if(f&FACE_XP) push_quad_n(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0,1,0,0,bt);
-                if(f&FACE_XN) push_quad_n(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0,bt);
-                if(f&FACE_YP) push_quad_n(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1,0,1,0,bt);
-                if(f&FACE_YN) push_quad_n(buf,&idx,x0,y0,z0,0,0,x1,y0,z0,1,0,x1,y0,z1,1,1,x0,y0,z1,0,1,0,-1,0,bt);
-                if(f&FACE_ZP) push_quad_n(buf,&idx,x1,y0,z0,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x1,y1,z0,0,0,0,0,-1,bt);
-                if(f&FACE_ZN) push_quad_n(buf,&idx,x0,y0,z1,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x0,y1,z1,0,0,0,0,1,bt);
+                if(f&FACE_XP) push_quad_n(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0, 1,0,0);
+                if(f&FACE_XN) push_quad_n(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0);
+                if(f&FACE_YP) push_quad_n(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1, 0,1,0);
+                if(f&FACE_YN) push_quad_n(buf,&idx,x0,y0,z0,0,0,x1,y0,z0,1,0,x1,y0,z1,1,1,x0,y0,z1,0,1, 0,-1,0);
+                if(f&FACE_ZP) push_quad_n(buf,&idx,x1,y0,z0,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x1,y1,z0,0,0, 0,0,-1);
+                if(f&FACE_ZN) push_quad_n(buf,&idx,x0,y0,z1,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x0,y1,z1,0,0, 0,0,1);
             }
 
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
@@ -165,25 +129,17 @@ static void render_world(struct engine* eng) {
     glUniform3f(glGetUniformLocation(eng->program, "camPos"),
                 eng->camPos[0], eng->camPos[1], eng->camPos[2]);
 
-    /* Привязка текстур всех типов блоков */
-    for (int i = 1; i < BLOCK_COUNT; i++) {
-        char name[16];
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, eng->texGrassTop);
+    glUniform1i(glGetUniformLocation(eng->program, "texTop"), 0);
 
-        glActiveTexture(GL_TEXTURE0 + (i-1)*3);
-        glBindTexture(GL_TEXTURE_2D, eng->texTop[i]);
-        sprintf(name, "texT%d", i);
-        glUniform1i(glGetUniformLocation(eng->program, name), (i-1)*3);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
+    glUniform1i(glGetUniformLocation(eng->program, "texSide"), 1);
 
-        glActiveTexture(GL_TEXTURE0 + (i-1)*3 + 1);
-        glBindTexture(GL_TEXTURE_2D, eng->texSide[i]);
-        sprintf(name, "texS%d", i);
-        glUniform1i(glGetUniformLocation(eng->program, name), (i-1)*3 + 1);
-
-        glActiveTexture(GL_TEXTURE0 + (i-1)*3 + 2);
-        glBindTexture(GL_TEXTURE_2D, eng->texBottom[i]);
-        sprintf(name, "texB%d", i);
-        glUniform1i(glGetUniformLocation(eng->program, name), (i-1)*3 + 2);
-    }
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, eng->texGrassDown);
+    glUniform1i(glGetUniformLocation(eng->program, "texDown"), 2);
 
     float proj[16], view[16], mvp[16];
     mat4_perspective(proj, GAME_FOV, (float)eng->width/(float)eng->height, 0.1f, 120.0f);
@@ -191,16 +147,13 @@ static void render_world(struct engine* eng) {
     mat4_mul(mvp, proj, view);
     glUniformMatrix4fv(glGetUniformLocation(eng->program, "m"), 1, GL_FALSE, mvp);
 
-    /* stride = 9 floats = 36 bytes */
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 36, (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 36, (void*)12);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 32, (void*)12);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 36, (void*)20);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 32, (void*)20);
     glEnableVertexAttribArray(2);
-    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 36, (void*)32);
-    glEnableVertexAttribArray(3);
     glDrawArrays(GL_TRIANGLES, 0, eng->visibleFaceCount * 6);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -218,7 +171,7 @@ static void init_ui_shader(void) {
 }
 
 static void draw_ring(float cx,float cy,float r,float thick,int w,int h,float cr,float cg,float cb,float ca) {
-    float ndcX=(cx/w)*2-1, ndcY=1-(cy/h)*2;
+    float ndcX=(cx/w)*2-1,ndcY=1-(cy/h)*2;
     float rxo=(r/w)*2,ryo=(r/h)*2,rxi=((r-thick)/w)*2,ryi=((r-thick)/h)*2;
     float verts[(32+1)*4]; int segs=32;
     for(int i=0;i<=segs;i++){float a=(float)i/segs*2*PI;float c=cosf(a),s=sinf(a);
@@ -245,18 +198,6 @@ static void draw_rect(float cx,float cy,float hw,float hh,int sw,int sh,float cr
     glDrawArrays(GL_TRIANGLES,0,6);
 }
 
-/* Цвета блоков для инвентаря */
-static void get_block_color(int type, float* r, float* g, float* b) {
-    switch(type) {
-        case BLOCK_GRASS: *r=0.39f;*g=0.7f;*b=0.23f; break;
-        case BLOCK_DIRT:  *r=0.55f;*g=0.43f;*b=0.27f; break;
-        case BLOCK_STONE: *r=0.5f;*g=0.5f;*b=0.5f; break;
-        case BLOCK_SAND:  *r=0.86f;*g=0.82f;*b=0.63f; break;
-        case BLOCK_SNOW:  *r=0.94f;*g=0.96f;*b=1.0f; break;
-        default: *r=0;*g=0;*b=0;
-    }
-}
-
 static void draw_ui(struct engine* eng) {
     int sw=eng->width, sh=eng->height;
     glDisable(GL_DEPTH_TEST); glEnable(GL_BLEND);
@@ -277,7 +218,7 @@ static void draw_ui(struct engine* eng) {
     float bx=sw-JUMP_BTN_OFFSET, by=sh-JUMP_BTN_OFFSET;
     draw_ring(bx,by,JUMP_BTN_SIZE,3,sw,sh,0,0,0,1);
     float as=JUMP_BTN_SIZE*0.3f;
-    float anx=(bx/sw)*2-1, any=1-(by/sh)*2, aax=(as/sw)*2, aay=(as/sh)*2;
+    float anx=(bx/sw)*2-1,any=1-(by/sh)*2,aax=(as/sw)*2,aay=(as/sh)*2;
     float arrow[]={anx,any+aay,anx-aax,any-aay*0.5f,anx+aax,any-aay*0.5f};
     glUseProgram(uiProg);glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow);glEnableVertexAttribArray(0);
@@ -294,34 +235,6 @@ static void draw_ui(struct engine* eng) {
     draw_ring(pbx,pby,ACTION_BTN_SIZE,3,sw,sh,0,0,0,1);
     draw_rect(pbx,pby,ACTION_BTN_SIZE*0.3f,2.5f,sw,sh,0,0,0,1);
     draw_rect(pbx,pby,2.5f,ACTION_BTN_SIZE*0.3f,sw,sh,0,0,0,1);
-
-    /* Инвентарь */
-    float invW = INV_SLOTS * (INV_SLOT_SIZE + INV_PADDING) - INV_PADDING;
-    float invStartX = (sw - invW) / 2.0f;
-    float invY = sh - INV_Y_OFFSET;
-
-    for (int i = 0; i < INV_SLOTS; i++) {
-        float slotX = invStartX + i * (INV_SLOT_SIZE + INV_PADDING) + INV_SLOT_SIZE / 2.0f;
-        float hs = INV_SLOT_SIZE / 2.0f;
-
-        /* Фон слота */
-        if (i == eng->selectedSlot)
-            draw_rect(slotX, invY, hs+2, hs+2, sw, sh, 1,1,1, 0.5f);
-        draw_rect(slotX, invY, hs, hs, sw, sh, 0,0,0, 0.4f);
-
-        /* Блок внутри */
-        if (eng->invSlots[i] > 0) {
-            float r,g,b;
-            get_block_color(eng->invSlots[i], &r, &g, &b);
-            draw_rect(slotX, invY, hs-4, hs-4, sw, sh, r,g,b, 1);
-        }
-
-        /* Обводка */
-        draw_ring(slotX, invY, hs, 2, sw, sh,
-                  i==eng->selectedSlot ? 1.0f : 0.3f,
-                  i==eng->selectedSlot ? 1.0f : 0.3f,
-                  i==eng->selectedSlot ? 1.0f : 0.3f, 1);
-    }
 
     glDisable(GL_BLEND); glEnable(GL_DEPTH_TEST);
 }
