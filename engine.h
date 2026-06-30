@@ -6,9 +6,10 @@
 #include <GLES2/gl2.h>
 #include <stdbool.h>
 
+/* Джойстик зеркально от прыжка */
 #define JOY_RADIUS      80.0f
-#define JOY_Y_OFFSET    160.0f
 #define JOY_X_OFFSET    130.0f
+#define JOY_Y_OFFSET    130.0f
 #define STICK_RADIUS    32.0f
 
 #define JUMP_BTN_SIZE   80.0f
@@ -54,8 +55,12 @@
 #define INV_PADDING     4.0f
 #define INV_Y_OFFSET    50.0f
 
+#define ANIM_BREAK_FRAMES 12
 #define ANIM_PLACE_FRAMES 8
-#define ANIM_BREAK_FRAMES 8
+
+/* Состояния игры */
+#define STATE_MENU      0
+#define STATE_PLAYING   1
 
 struct block_edit {
     int wx, wy, wz;
@@ -103,12 +108,18 @@ struct engine {
     unsigned char invSlots[INV_SLOTS];
     int selectedSlot;
 
-    /* Анимация блока в мире */
-    int animPlaceTimer;
+    /* Анимация блока */
     int animBreakTimer;
+    int animPlaceTimer;
     float animBlockX, animBlockY, animBlockZ;
     bool animActive;
     bool animIsBreak;
+
+    /* Меню */
+    int gameState;
+    int worldSeed;
+    int seedDigits[6];
+    int seedCursor;
 };
 
 #endif
