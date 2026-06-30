@@ -26,11 +26,10 @@
 #define JUMP_FORCE      0.12f
 #define TERM_VEL       -0.25f
 
-/* Чанки */
-#define CHUNK_SIZE      16
+/* Радиус загрузки блоков вокруг игрока */
+#define LOAD_RADIUS     40
+#define WORLD_BUF       (LOAD_RADIUS * 2 + 1)
 #define CHUNK_H         10
-#define VIEW_DIST       3
-#define MAX_CHUNKS      ((VIEW_DIST * 2 + 1) * (VIEW_DIST * 2 + 1))
 
 #define FACE_XP 0x01
 #define FACE_XN 0x02
@@ -39,16 +38,6 @@
 #define FACE_ZP 0x10
 #define FACE_ZN 0x20
 
-struct chunk {
-    int cx, cz;                /* координаты чанка в чанковом пространстве */
-    unsigned char blocks[CHUNK_SIZE][CHUNK_H][CHUNK_SIZE];
-    unsigned char faces[CHUNK_SIZE][CHUNK_H][CHUNK_SIZE];
-    GLuint vbo;
-    int faceCount;
-    bool active;
-    bool meshDirty;
-};
-
 struct engine {
     struct android_app* app;
     EGLDisplay display;
@@ -56,6 +45,7 @@ struct engine {
     EGLContext context;
     int32_t width, height;
     GLuint program;
+    GLuint texture;
 
     float camPos[3];
     float camRot[2];
@@ -70,9 +60,17 @@ struct engine {
     int lookPointerId;
     bool onGround;
 
-    struct chunk chunks[MAX_CHUNKS];
-    int lastChunkX, lastChunkZ;
-    bool chunksReady;
+    GLuint vbo;
+    int visibleFaceCount;
+    bool meshDirty;
+
+    /* Центр загруженной области в мировых координатах */
+    int loadCenterX, loadCenterZ;
+    bool worldLoaded;
+
+    /* Блоки вокруг игрока */
+    unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
+    unsigned char faces[WORLD_BUF][CHUNK_H][WORLD_BUF];
 };
 
 #endif
