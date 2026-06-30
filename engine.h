@@ -6,19 +6,29 @@
 #include <GLES2/gl2.h>
 #include <stdbool.h>
 
-#define JOY_RADIUS      70.0f
-#define JOY_Y_OFFSET    160.0f
-#define JOY_X_OFFSET    140.0f
-#define STICK_RADIUS    28.0f
-#define JUMP_BTN_SIZE   55.0f
-#define JUMP_BTN_OFFSET 130.0f
+/* Джойстик — увеличен */
+#define JOY_RADIUS      110.0f
+#define JOY_Y_OFFSET    200.0f
+#define JOY_X_OFFSET    180.0f
+#define STICK_RADIUS    44.0f
+
+/* Кнопка прыжка — размер как джойстик */
+#define JUMP_BTN_SIZE   110.0f
+#define JUMP_BTN_OFFSET 180.0f
+
 #define PI              3.14159265f
 
+/* Хитбокс игрока */
 #define PLAYER_W        0.4f
 #define PLAYER_H        2.0f
 #define EYE_H           1.65f
 #define HEAD_MARGIN     0.15f
 #define GAME_FOV        1.4915f
+
+/* Лунная физика */
+#define GRAVITY         0.005f
+#define JUMP_FORCE      0.16f
+#define TERM_VEL       -0.25f
 
 struct engine {
     struct android_app* app;
