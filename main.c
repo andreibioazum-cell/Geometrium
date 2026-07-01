@@ -8,7 +8,7 @@
 #include "engine.h"
 #include "world.h"
 #include "math_utils.h"
-#include "physics.h"
+#include "physics.h"   // <--- ДОБАВЛЕНО!
 #include "input.h"
 #include "render.h"
 
@@ -202,7 +202,7 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         // Генерируем случайный сид при запуске
         srand(time(NULL));
         game_seed = (unsigned int)rand();
-        eng->worldSeed = game_seed;
+        eng->worldSeed = (int)game_seed;
     }
 }
 
