@@ -5,6 +5,7 @@
 #include <math.h>
 #include "engine.h"
 #include "world.h"
+#include "render.h"
 
 static int32_t handle_menu_input(struct engine* eng, float x, float y) {
     int sw = eng->width, sh = eng->height;
@@ -99,16 +100,31 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             place_block(eng); return 1;
         }
 
-        if (x < eng->width / 2) {
-            eng->joyX = JOY_X_OFFSET;
-            eng->joyY = eng->height - JOY_Y_OFFSET;
+        /* ДЖОЙСТИК - ТОЛЬКО ПРИ НАЖАТИИ В ОБЛАСТИ ДЖОЙСТИКА */
+        float jx = JOY_X_OFFSET, jy = eng->height - JOY_Y_OFFSET;
+        float djx2 = x - jx, djy2 = y - jy;
+        float dist = sqrtf(djx2*djx2 + djy2*djy2);
+        
+        if (dist < JOY_RADIUS * 2.0f) {  // увеличенная зона для удобства
+            eng->joyTouched = true;
             eng->isMoving = true;
             eng->movePointerId = id;
-            eng->moveDirX = 0; eng->moveDirZ = 0;
-        } else {
-            eng->lastTouchX = x; eng->lastTouchY = y;
-            eng->lookPointerId = id;
+            // Рассчитываем направление сразу
+            if (dist > 10.0f) {
+                float c = dist > JOY_RADIUS ? JOY_RADIUS : dist;
+                eng->moveDirX = (djx2/dist) * (c/JOY_RADIUS);
+                eng->moveDirZ = (djy2/dist) * (c/JOY_RADIUS);
+            } else {
+                eng->moveDirX = 0;
+                eng->moveDirZ = 0;
+            }
+            return 1;
         }
+        
+        // Если не джойстик - значит взгляд
+        eng->lastTouchX = x;
+        eng->lastTouchY = y;
+        eng->lookPointerId = id;
         return 1;
     }
 
@@ -118,21 +134,29 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             float x = AMotionEvent_getX(event, i);
             float y = AMotionEvent_getY(event, i);
             int id = AMotionEvent_getPointerId(event, i);
-            if (id == eng->movePointerId && eng->isMoving) {
-                float dx = x - eng->joyX, dy = y - eng->joyY;
+            
+            // Обработка джойстика - только если он был нажат
+            if (id == eng->movePointerId && eng->isMoving && eng->joyTouched) {
+                float dx = x - JOY_X_OFFSET;
+                float dy = y - (eng->height - JOY_Y_OFFSET);
                 float d = sqrtf(dx*dx + dy*dy);
                 if (d > 10.0f) {
                     float c = d > JOY_RADIUS ? JOY_RADIUS : d;
                     eng->moveDirX = (dx/d)*(c/JOY_RADIUS);
                     eng->moveDirZ = (dy/d)*(c/JOY_RADIUS);
-                } else { eng->moveDirX = 0; eng->moveDirZ = 0; }
+                } else {
+                    eng->moveDirX = 0;
+                    eng->moveDirZ = 0;
+                }
             }
+            
             if (id == eng->lookPointerId) {
                 eng->camRot[1] += (x - eng->lastTouchX) * 0.004f;
                 eng->camRot[0] += (y - eng->lastTouchY) * 0.004f;
                 if (eng->camRot[0] > 1.4f) eng->camRot[0] = 1.4f;
                 if (eng->camRot[0] < -1.4f) eng->camRot[0] = -1.4f;
-                eng->lastTouchX = x; eng->lastTouchY = y;
+                eng->lastTouchX = x;
+                eng->lastTouchY = y;
             }
         }
         return 1;
@@ -143,9 +167,15 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
                  >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
         int id = AMotionEvent_getPointerId(event, pi);
         if (id == eng->movePointerId) {
-            eng->isMoving = false; eng->moveDirX = 0; eng->moveDirZ = 0; eng->movePointerId = -1;
+            eng->isMoving = false;
+            eng->moveDirX = 0;
+            eng->moveDirZ = 0;
+            eng->movePointerId = -1;
+            eng->joyTouched = false;
         }
-        if (id == eng->lookPointerId) eng->lookPointerId = -1;
+        if (id == eng->lookPointerId) {
+            eng->lookPointerId = -1;
+        }
         return 1;
     }
     return 0;
