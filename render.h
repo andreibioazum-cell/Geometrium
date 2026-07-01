@@ -30,6 +30,9 @@ void render_world(struct engine* eng);
 }
 #endif
 
+/* ============= ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============= */
+GLuint uiProg = 0;  /* <--- СДЕЛАНО ГЛОБАЛЬНЫМ, НЕ STATIC */
+
 /* ============= TEXTURES ============= */
 static GLuint load_texture(struct android_app* app, const char* filename) {
     AAssetManager* mgr = app->activity->assetManager;
@@ -218,7 +221,7 @@ static void render_inv_block_2d(struct engine* eng, float screenX, float screenY
     
     glUseProgram(uiProg);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);  // <--- ИСПОЛЬЗУЕМ grass_side.png
+    glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
     glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glUniform4f(glGetUniformLocation(uiProg, "col"), 1, 1, 1, 1);
     
@@ -260,8 +263,6 @@ void render_world(struct engine* eng) {
 }
 
 /* ============= UI ============= */
-GLuint uiProg = 0;
-
 void init_ui_shader(void) {
     const char* vS = 
         "attribute vec2 aPos;attribute vec2 aUV;"
