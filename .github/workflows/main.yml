@@ -13,12 +13,7 @@ jobs:
       with:
         ndk-version: r25c
     - name: Get STB
-      run: |
-        wget -O stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
-        wget -O stb_truetype.h https://raw.githubusercontent.com/nothings/stb/master/stb_truetype.h
-    - name: Get Font
-      run: |
-        wget -O font.ttf https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Regular.ttf
+      run: wget -O stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
     - name: Build
       run: |
         TOOLCHAIN=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin
@@ -32,7 +27,6 @@ jobs:
         cp libmain_64.so staging/lib/arm64-v8a/libmain.so
         cp libmain_32.so staging/lib/armeabi-v7a/libmain.so
         cp *.png staging/assets/ 2>/dev/null || true
-        cp font.ttf staging/assets/
         BT=$ANDROID_HOME/build-tools/34.0.0
         $BT/aapt package -f -M AndroidManifest.xml -I $ANDROID_HOME/platforms/android-34/android.jar -F unsigned.apk staging/
         $BT/zipalign -v 4 unsigned.apk aligned.apk
