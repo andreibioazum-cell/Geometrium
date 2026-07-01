@@ -76,9 +76,6 @@ void init_textures(struct engine* eng) {
     eng->texGrassTop = load_texture(eng->app, "grass_top.png");
     eng->texGrassSide = load_texture(eng->app, "grass_side.png");
     eng->texGrassDown = load_texture(eng->app, "grass_down.png");
-    /* Текстура для инвентаря (2D вид сбоку) */
-    eng->texInvBlock = load_texture(eng->app, "inv_block.png");
-    if (!eng->texInvBlock) eng->texInvBlock = make_color_tex(120, 100, 70);
     if (!eng->texGrassTop) eng->texGrassTop = make_color_tex(100, 180, 60);
     if (!eng->texGrassSide) eng->texGrassSide = make_color_tex(120, 100, 70);
     if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
@@ -204,7 +201,7 @@ static void render_anim_block(struct engine* eng) {
     if (alpha < 1.0f) glDisable(GL_BLEND);
 }
 
-/* 2D текстура блока для инвентаря */
+/* 2D текстура блока для инвентаря - использует grass_side.png */
 static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
     float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
     float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
@@ -221,8 +218,9 @@ static void render_inv_block_2d(struct engine* eng, float screenX, float screenY
     
     glUseProgram(uiProg);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, eng->texInvBlock);
+    glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);  // <--- ИСПОЛЬЗУЕМ grass_side.png
     glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 1, 1, 1, 1);
     
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
     glEnableVertexAttribArray(0);
@@ -300,7 +298,6 @@ static void draw_rect(float cx, float cy, float hw, float hh, int sw, int sh,
                  nx-rw, ny-rh, nx+rw, ny+rh, nx-rw, ny+rh};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
-    // Отключаем текстуру
     glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v);
     glEnableVertexAttribArray(0);
@@ -446,7 +443,7 @@ void draw_ui(struct engine* eng) {
     draw_rect(cx, cy, 10, 1, sw, sh, 1,1,1,1);
     draw_rect(cx, cy, 1, 10, sw, sh, 1,1,1,1);
 
-    // Джойстик - всегда рисуем в одной позиции
+    // Джойстик
     float jx = JOY_X_OFFSET, jy = sh - JOY_Y_OFFSET;
     draw_ring(jx, jy, JOY_RADIUS, 3, sw, sh, 0,0,0,1);
     draw_circle(jx + eng->moveDirX*JOY_RADIUS*0.6f,
@@ -490,7 +487,7 @@ void draw_ui(struct engine* eng) {
     draw_rect(pbx,pby,ACTION_BTN_SIZE*0.3f,2.5f,sw,sh,0,0,0,1);
     draw_rect(pbx,pby,2.5f,ACTION_BTN_SIZE*0.3f,sw,sh,0,0,0,1);
 
-    // Инвентарь - с 2D текстурой блока
+    // Инвентарь - используем grass_side.png как 2D текстуру
     float invW = INV_SLOTS*(INV_SLOT_SIZE+INV_PADDING)-INV_PADDING;
     float invStartX = (sw-invW)/2.0f;
     float invY = sh-INV_Y_OFFSET;
