@@ -13,7 +13,9 @@ jobs:
       with:
         ndk-version: r25c
     - name: Get STB
-      run: wget -O stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+      run: |
+        wget -O stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+        wget -O stb_truetype.h https://raw.githubusercontent.com/nothings/stb/master/stb_truetype.h
     - name: Build
       run: |
         TOOLCHAIN=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin
