@@ -2,6 +2,8 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <android/log.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include "engine.h"
 #include "world.h"
@@ -196,6 +198,11 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         init_textures(eng);
         init_ui_shader();
         init_inv_shader(eng);
+        
+        // Генерируем случайный сид при запуске
+        srand(time(NULL));
+        game_seed = (unsigned int)rand();
+        eng->worldSeed = game_seed;
     }
 }
 
