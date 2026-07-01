@@ -8,7 +8,7 @@
 #include "math_utils.h"
 #include "physics.h"
 #include "input.h"
-#include "render.h"   // <--- ЭТО БЫЛО ПРОПУЩЕНО!
+#include "render.h"
 
 #define LOG_TAG "Geometrium"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -208,6 +208,7 @@ void android_main(struct android_app* state) {
     eng.selectedSlot = 0;
     eng.gameState = STATE_MENU;
     eng.seedCursor = 0;
+    eng.joyTouched = false;
     eng.invSlots[0] = BLOCK_GRASS;
     eng.invSlots[1] = BLOCK_GRASS;
     eng.invSlots[2] = BLOCK_GRASS;
