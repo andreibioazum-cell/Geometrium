@@ -10,7 +10,7 @@ static int32_t handle_menu_input(struct engine* eng, float x, float y) {
     int sw = eng->width, sh = eng->height;
     float btnW = 200, btnH = 50;
 
-    /* Кнопки цифр 0-9 */
+    /* Цифровые кнопки 0-9 */
     float numStartX = (sw - 10 * 40) / 2.0f;
     float numY = sh / 2.0f;
     if (y > numY - 25 && y < numY + 25 && x > numStartX && x < numStartX + 400) {
@@ -37,7 +37,7 @@ static int32_t handle_menu_input(struct engine* eng, float x, float y) {
         for (int i = 0; i < eng->seedCursor; i++)
             seed = seed * 10 + eng->seedDigits[i];
         eng->worldSeed = seed;
-        game_seed = (unsigned int)seed;
+        game_seed = (unsigned int)seed;   // теперь глобальная переменная
         eng->gameState = STATE_PLAYING;
         eng->worldLoaded = false;
         eng->editCount = 0;
@@ -108,7 +108,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             place_block(eng); return 1;
         }
 
-        /* Джойстик — зеркально от прыжка, слева */
+        /* Джойстик */
         if (x < eng->width / 2) {
             eng->joyX = JOY_X_OFFSET;
             eng->joyY = eng->height - JOY_Y_OFFSET;
