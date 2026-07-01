@@ -14,10 +14,8 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-// Глобальная переменная для сида
 unsigned int game_seed = 0;
 
-// Проверка компиляции шейдера
 static int check_shader(GLuint shader, const char* name) {
     GLint status;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
@@ -30,7 +28,6 @@ static int check_shader(GLuint shader, const char* name) {
     return 1;
 }
 
-// Проверка линковки программы
 static int check_program(GLuint prog, const char* name) {
     GLint status;
     glGetProgramiv(prog, GL_LINK_STATUS, &status);
@@ -151,7 +148,6 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
             return;
         }
 
-        // Основной шейдер
         const char* vS =
             "attribute vec3 pos;attribute vec2 uv;attribute vec3 norm;"
             "varying vec2 vUV;varying vec3 vNorm;varying vec3 vWorldPos;"
