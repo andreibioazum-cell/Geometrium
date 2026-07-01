@@ -31,7 +31,7 @@ void render_world(struct engine* eng);
 #endif
 
 /* ============= ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============= */
-GLuint uiProg = 0;  /* <--- СДЕЛАНО ГЛОБАЛЬНЫМ, НЕ STATIC */
+GLuint uiProg = 0;
 
 /* ============= TEXTURES ============= */
 static GLuint load_texture(struct android_app* app, const char* filename) {
@@ -57,8 +57,8 @@ static GLuint load_texture(struct android_app* app, const char* filename) {
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
     stbi_image_free(img);
     return tex;
@@ -204,26 +204,27 @@ static void render_anim_block(struct engine* eng) {
     if (alpha < 1.0f) glDisable(GL_BLEND);
 }
 
-/* 2D текстура блока для инвентаря - использует grass_side.png */
+/* 2D текстура блока для инвентаря - исправлено отображение */
 static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
     float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
     float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
     float s = size / eng->height * 2.0f;
     
+    /* Правильные координаты текстур (без переворота) */
     float verts[] = {
-        ndcX - s, ndcY - s, 0, 0,
-        ndcX + s, ndcY - s, 1, 0,
-        ndcX + s, ndcY + s, 1, 1,
-        ndcX - s, ndcY - s, 0, 0,
-        ndcX + s, ndcY + s, 1, 1,
-        ndcX - s, ndcY + s, 0, 1
+        ndcX - s, ndcY - s, 0.0f, 1.0f,
+        ndcX + s, ndcY - s, 1.0f, 1.0f,
+        ndcX + s, ndcY + s, 1.0f, 0.0f,
+        ndcX - s, ndcY - s, 0.0f, 1.0f,
+        ndcX + s, ndcY + s, 1.0f, 0.0f,
+        ndcX - s, ndcY + s, 0.0f, 0.0f
     };
     
     glUseProgram(uiProg);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
     glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
-    glUniform4f(glGetUniformLocation(uiProg, "col"), 1, 1, 1, 1);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 1.0f, 1.0f, 1.0f, 1.0f);
     
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
     glEnableVertexAttribArray(0);
@@ -265,9 +266,13 @@ void render_world(struct engine* eng) {
 /* ============= UI ============= */
 void init_ui_shader(void) {
     const char* vS = 
-        "attribute vec2 aPos;attribute vec2 aUV;"
+        "attribute vec2 aPos;"
+        "attribute vec2 aUV;"
         "varying vec2 vUV;"
-        "void main(){gl_Position=vec4(aPos,0.0,1.0);vUV=aUV;}";
+        "void main(){"
+        "  gl_Position=vec4(aPos,0.0,1.0);"
+        "  vUV=aUV;"
+        "}";
     const char* fS = 
         "precision mediump float;"
         "varying vec2 vUV;"
@@ -488,7 +493,7 @@ void draw_ui(struct engine* eng) {
     draw_rect(pbx,pby,ACTION_BTN_SIZE*0.3f,2.5f,sw,sh,0,0,0,1);
     draw_rect(pbx,pby,2.5f,ACTION_BTN_SIZE*0.3f,sw,sh,0,0,0,1);
 
-    // Инвентарь - используем grass_side.png как 2D текстуру
+    // Инвентарь
     float invW = INV_SLOTS*(INV_SLOT_SIZE+INV_PADDING)-INV_PADDING;
     float invStartX = (sw-invW)/2.0f;
     float invY = sh-INV_Y_OFFSET;
@@ -502,9 +507,9 @@ void draw_ui(struct engine* eng) {
         else
             draw_rect(slotX, invY, hs, hs, sw, sh, 0.12f,0.12f,0.12f, 0.75f);
         draw_border(slotX, invY, hs, hs, 2.0f, sw, sh,
-                    sel?1:0.35f, sel?1:0.35f, sel?1:0.35f, 1);
+                    sel?1.0f:0.35f, sel?1.0f:0.35f, sel?1.0f:0.35f, 1.0f);
         if (eng->invSlots[i] == BLOCK_GRASS) {
-            render_inv_block_2d(eng, slotX, invY, hs*0.6f);
+            render_inv_block_2d(eng, slotX, invY, hs*0.7f);
         }
     }
 
