@@ -204,13 +204,13 @@ static void render_anim_block(struct engine* eng) {
     if (alpha < 1.0f) glDisable(GL_BLEND);
 }
 
-/* 2D текстура блока для инвентаря - исправлено отображение */
+/* 2D текстура блока для инвентаря */
 static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
     float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
     float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
     float s = size / eng->height * 2.0f;
     
-    /* Правильные координаты текстур (без переворота) */
+    /* Правильные координаты текстур */
     float verts[] = {
         ndcX - s, ndcY - s, 0.0f, 1.0f,
         ndcX + s, ndcY - s, 1.0f, 1.0f,
@@ -278,9 +278,14 @@ void init_ui_shader(void) {
         "varying vec2 vUV;"
         "uniform vec4 col;"
         "uniform sampler2D tex;"
+        "uniform int useTex;"
         "void main(){"
-        "  vec4 t=texture2D(tex,vUV);"
-        "  gl_FragColor=col*t;"
+        "  if(useTex == 1){"
+        "    vec4 t=texture2D(tex,vUV);"
+        "    gl_FragColor=col*t;"
+        "  } else {"
+        "    gl_FragColor=col;"
+        "  }"
         "}";
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vs, 1, &vS, NULL);
@@ -296,18 +301,45 @@ void init_ui_shader(void) {
     glDeleteShader(fs);
 }
 
-static void draw_rect(float cx, float cy, float hw, float hh, int sw, int sh,
-                      float cr, float cg, float cb, float ca) {
+/* Функция для отрисовки без текстуры (чистый цвет) */
+static void draw_rect_no_tex(float cx, float cy, float hw, float hh, int sw, int sh,
+                              float cr, float cg, float cb, float ca) {
     float nx = (cx/sw)*2.0f-1.0f, ny = 1.0f-(cy/sh)*2.0f;
     float rw = (hw/sw)*2.0f, rh = (hh/sh)*2.0f;
     float v[] = {nx-rw, ny-rh, nx+rw, ny-rh, nx+rw, ny+rh,
                  nx-rw, ny-rh, nx+rw, ny+rh, nx-rw, ny+rh};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);  // БЕЗ ТЕКСТУРЫ
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES,0,6);
+}
+
+/* Функция для отрисовки с текстурой */
+static void draw_rect_tex(float cx, float cy, float hw, float hh, int sw, int sh,
+                          GLuint tex, float cr, float cg, float cb, float ca) {
+    float nx = (cx/sw)*2.0f-1.0f, ny = 1.0f-(cy/sh)*2.0f;
+    float rw = (hw/sw)*2.0f, rh = (hh/sh)*2.0f;
+    float v[] = {nx-rw, ny-rh, 0, 1, nx+rw, ny-rh, 1, 1, nx+rw, ny+rh, 1, 0,
+                 nx-rw, ny-rh, 0, 1, nx+rw, ny+rh, 1, 0, nx-rw, ny+rh, 0, 0};
+    glUseProgram(uiProg);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);  // С ТЕКСТУРОЙ
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,16,v);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,16,v+2);
+    glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLES,0,6);
+}
+
+/* Старые функции переделаны для использования draw_rect_no_tex */
+static void draw_rect(float cx, float cy, float hw, float hh, int sw, int sh,
+                      float cr, float cg, float cb, float ca) {
+    draw_rect_no_tex(cx, cy, hw, hh, sw, sh, cr, cg, cb, ca);
 }
 
 static void draw_ring(float cx, float cy, float r, float thick, int w, int h,
@@ -327,7 +359,7 @@ static void draw_ring(float cx, float cy, float r, float thick, int w, int h,
     }
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,verts);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLE_STRIP,0,(segs+1)*2);
@@ -347,7 +379,7 @@ static void draw_circle(float cx, float cy, float r, int w, int h,
     }
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,verts);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLE_FAN,0,segs+2);
@@ -355,10 +387,10 @@ static void draw_circle(float cx, float cy, float r, int w, int h,
 
 static void draw_border(float cx, float cy, float hw, float hh, float t, int sw, int sh,
                         float cr, float cg, float cb, float ca) {
-    draw_rect(cx, cy-hh+t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
-    draw_rect(cx, cy+hh-t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
-    draw_rect(cx-hw+t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
-    draw_rect(cx+hw-t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx, cy-hh+t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx, cy+hh-t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx-hw+t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx+hw-t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
 }
 
 static void draw_digit(float cx, float cy, float sz, int d, int sw, int sh,
@@ -371,60 +403,60 @@ static void draw_digit(float cx, float cy, float sz, int d, int sw, int sh,
         {1,1,1,1,1,0,1}
     };
     if (d < 0 || d > 9) return;
-    if (segs[d][0]) draw_rect(cx, cy-h, w, t, sw, sh, cr,cg,cb,1);
-    if (segs[d][1]) draw_rect(cx, cy, w, t, sw, sh, cr,cg,cb,1);
-    if (segs[d][2]) draw_rect(cx, cy+h, w, t, sw, sh, cr,cg,cb,1);
-    if (segs[d][3]) draw_rect(cx-w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
-    if (segs[d][4]) draw_rect(cx+w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
-    if (segs[d][5]) draw_rect(cx-w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
-    if (segs[d][6]) draw_rect(cx+w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+    if (segs[d][0]) draw_rect_no_tex(cx, cy-h, w, t, sw, sh, cr,cg,cb,1);
+    if (segs[d][1]) draw_rect_no_tex(cx, cy, w, t, sw, sh, cr,cg,cb,1);
+    if (segs[d][2]) draw_rect_no_tex(cx, cy+h, w, t, sw, sh, cr,cg,cb,1);
+    if (segs[d][3]) draw_rect_no_tex(cx-w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+    if (segs[d][4]) draw_rect_no_tex(cx+w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+    if (segs[d][5]) draw_rect_no_tex(cx-w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+    if (segs[d][6]) draw_rect_no_tex(cx+w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
 }
 
 /* ============= DRAW MENU ============= */
 void draw_menu(struct engine* eng) {
     int sw = eng->width, sh = eng->height;
-    draw_rect(sw/2.0f, sh/2.0f, sw/2.0f, sh/2.0f, sw, sh, 0.2f,0.6f,0.3f, 1);
+    draw_rect_no_tex(sw/2.0f, sh/2.0f, sw/2.0f, sh/2.0f, sw, sh, 0.2f,0.6f,0.3f, 1);
     float titleY = sh * 0.25f;
-    draw_rect(sw/2.0f, titleY, 120, 25, sw, sh, 0,0,0, 0.3f);
+    draw_rect_no_tex(sw/2.0f, titleY, 120, 25, sw, sh, 0,0,0, 0.3f);
     draw_digit(sw/2.0f - 60, titleY, 18, 5, sw, sh, 1,1,1);
     draw_digit(sw/2.0f - 20, titleY, 18, 3, sw, sh, 1,1,1);
     draw_digit(sw/2.0f + 20, titleY, 18, 3, sw, sh, 1,1,1);
     draw_digit(sw/2.0f + 60, titleY, 18, 0, sw, sh, 1,1,1);
 
     float seedY = sh * 0.38f;
-    draw_rect(sw/2.0f, seedY, 100, 22, sw, sh, 0,0,0, 0.4f);
+    draw_rect_no_tex(sw/2.0f, seedY, 100, 22, sw, sh, 0,0,0, 0.4f);
     for (int i = 0; i < eng->seedCursor; i++) {
         float dx = (i - eng->seedCursor * 0.5f + 0.5f) * 28;
         draw_digit(sw/2.0f + dx, seedY, 14, eng->seedDigits[i], sw, sh, 1,1,1);
     }
     if (eng->seedCursor < 6) {
         float cx = sw/2.0f + (eng->seedCursor - eng->seedCursor*0.5f + 0.5f) * 28;
-        draw_rect(cx, seedY, 1.5f, 12, sw, sh, 1,1,1, 0.7f);
+        draw_rect_no_tex(cx, seedY, 1.5f, 12, sw, sh, 1,1,1, 0.7f);
     }
 
     float numY = sh * 0.52f;
     float numStartX = (sw - 10 * 40) / 2.0f;
     for (int i = 0; i <= 9; i++) {
         float bx = numStartX + i * 40 + 20;
-        draw_rect(bx, numY, 16, 16, sw, sh, 0.15f,0.15f,0.15f, 0.8f);
+        draw_rect_no_tex(bx, numY, 16, 16, sw, sh, 0.15f,0.15f,0.15f, 0.8f);
         draw_border(bx, numY, 16, 16, 1.5f, sw, sh, 0.5f,0.5f,0.5f, 1);
         draw_digit(bx, numY, 10, i, sw, sh, 1,1,1);
     }
 
     float clrX = sw/2.0f - 110, btnY = sh * 0.65f;
-    draw_rect(clrX, btnY, 45, 22, sw, sh, 0.6f,0.15f,0.15f, 0.9f);
+    draw_rect_no_tex(clrX, btnY, 45, 22, sw, sh, 0.6f,0.15f,0.15f, 0.9f);
     draw_border(clrX, btnY, 45, 22, 2, sw, sh, 1,0.3f,0.3f, 1);
     draw_digit(clrX, btnY, 12, 0, sw, sh, 1,1,1);
 
     float playX = sw/2.0f + 110;
-    draw_rect(playX, btnY, 70, 22, sw, sh, 0.15f,0.5f,0.15f, 0.9f);
+    draw_rect_no_tex(playX, btnY, 70, 22, sw, sh, 0.15f,0.5f,0.15f, 0.9f);
     draw_border(playX, btnY, 70, 22, 2, sw, sh, 0.3f,1,0.3f, 1);
     float pnx = (playX/sw)*2-1, pny = 1-(btnY/sh)*2;
     float pax = (15.0f/sw)*2, pay = (15.0f/sh)*2;
     float play[] = {pnx-pax,pny+pay, pnx-pax,pny-pay, pnx+pax,pny};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"),1,1,1,1);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,play);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES,0,3);
@@ -446,8 +478,8 @@ void draw_ui(struct engine* eng) {
 
     // Прицел
     float cx = (float)(sw / 2), cy = (float)(sh / 2);
-    draw_rect(cx, cy, 10, 1, sw, sh, 1,1,1,1);
-    draw_rect(cx, cy, 1, 10, sw, sh, 1,1,1,1);
+    draw_rect_no_tex(cx, cy, 10, 1, sw, sh, 1,1,1,1);
+    draw_rect_no_tex(cx, cy, 1, 10, sw, sh, 1,1,1,1);
 
     // Джойстик
     float jx = JOY_X_OFFSET, jy = sh - JOY_Y_OFFSET;
@@ -465,7 +497,7 @@ void draw_ui(struct engine* eng) {
     float arrow[] = {anx, any+aay, anx-aax, any-aay*0.5f, anx+aax, any-aay*0.5f};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES,0,3);
@@ -479,7 +511,7 @@ void draw_ui(struct engine* eng) {
     float d1[] = {xnx-xs-xwn,xny+ys, xnx-xs+xwn,xny+ys, xnx+xs+xwn,xny-ys,
                   xnx-xs-xwn,xny+ys, xnx+xs+xwn,xny-ys, xnx+xs-xwn,xny-ys};
     glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,d1);
     glDrawArrays(GL_TRIANGLES,0,6);
     float d2[] = {xnx+xs-xwn,xny+ys, xnx+xs+xwn,xny+ys, xnx-xs+xwn,xny-ys,
@@ -490,8 +522,8 @@ void draw_ui(struct engine* eng) {
     // Ставление
     float pbx = sw-PLACE_BTN_X, pby = PLACE_BTN_Y;
     draw_ring(pbx,pby,ACTION_BTN_SIZE,3,sw,sh,0,0,0,1);
-    draw_rect(pbx,pby,ACTION_BTN_SIZE*0.3f,2.5f,sw,sh,0,0,0,1);
-    draw_rect(pbx,pby,2.5f,ACTION_BTN_SIZE*0.3f,sw,sh,0,0,0,1);
+    draw_rect_no_tex(pbx,pby,ACTION_BTN_SIZE*0.3f,2.5f,sw,sh,0,0,0,1);
+    draw_rect_no_tex(pbx,pby,2.5f,ACTION_BTN_SIZE*0.3f,sw,sh,0,0,0,1);
 
     // Инвентарь
     float invW = INV_SLOTS*(INV_SLOT_SIZE+INV_PADDING)-INV_PADDING;
@@ -502,12 +534,18 @@ void draw_ui(struct engine* eng) {
     for (int i = 0; i < INV_SLOTS; i++) {
         float slotX = invStartX + i*(INV_SLOT_SIZE+INV_PADDING) + hs;
         bool sel = (i == eng->selectedSlot);
+        
+        // Фон слота (без текстуры)
         if (sel)
-            draw_rect(slotX, invY, hs, hs, sw, sh, 0.85f,0.85f,0.85f, 0.9f);
+            draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.85f,0.85f,0.85f, 0.9f);
         else
-            draw_rect(slotX, invY, hs, hs, sw, sh, 0.12f,0.12f,0.12f, 0.75f);
+            draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.12f,0.12f,0.12f, 0.75f);
+        
+        // Обводка (без текстуры)
         draw_border(slotX, invY, hs, hs, 2.0f, sw, sh,
                     sel?1.0f:0.35f, sel?1.0f:0.35f, sel?1.0f:0.35f, 1.0f);
+        
+        // Блок в слоте (с текстурой)
         if (eng->invSlots[i] == BLOCK_GRASS) {
             render_inv_block_2d(eng, slotX, invY, hs*0.7f);
         }
