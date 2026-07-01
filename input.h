@@ -9,31 +9,11 @@
 
 static int32_t handle_menu_input(struct engine* eng, float x, float y) {
     int sw = eng->width, sh = eng->height;
-    float numStartX = (sw - 10 * 40) / 2.0f;
-    float numY = sh / 2.0f;
-    if (y > numY - 25 && y < numY + 25 && x > numStartX && x < numStartX + 400) {
-        int digit = (int)((x - numStartX) / 40);
-        if (digit >= 0 && digit <= 9 && eng->seedCursor < 6) {
-            eng->seedDigits[eng->seedCursor] = digit;
-            eng->seedCursor++;
-        }
-        return 1;
-    }
-
-    float clrX = sw / 2.0f - 110, clrY = sh / 2.0f + 60;
-    if (x > clrX - 50 && x < clrX + 50 && y > clrY - 25 && y < clrY + 25) {
-        eng->seedCursor = 0;
-        for (int i = 0; i < 6; i++) eng->seedDigits[i] = 0;
-        return 1;
-    }
-
-    float playX = sw / 2.0f + 110, playY = sh / 2.0f + 60;
-    if (x > playX - 80 && x < playX + 80 && y > playY - 25 && y < playY + 25) {
-        int seed = 0;
-        for (int i = 0; i < eng->seedCursor; i++)
-            seed = seed * 10 + eng->seedDigits[i];
-        eng->worldSeed = seed;
-        game_seed = (unsigned int)seed;
+    
+    // Кнопка Play (центр экрана)
+    float playX = sw/2.0f, playY = sh * 0.65f;
+    if (x > playX - 150 && x < playX + 150 && 
+        y > playY - 40 && y < playY + 40) {
         eng->gameState = STATE_PLAYING;
         eng->worldLoaded = false;
         eng->editCount = 0;
@@ -68,6 +48,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         if (eng->gameState == STATE_MENU)
             return handle_menu_input(eng, x, y);
 
+        // Инвентарь
         float invW = INV_SLOTS * (INV_SLOT_SIZE + INV_PADDING) - INV_PADDING;
         float invStartX = (eng->width - invW) / 2.0f;
         float invY = eng->height - INV_Y_OFFSET;
@@ -80,6 +61,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             }
         }
 
+        // Прыжок
         float jbX = eng->width - JUMP_BTN_OFFSET;
         float jbY = eng->height - JUMP_BTN_OFFSET;
         float djx = x - jbX, djy = y - jbY;
@@ -88,28 +70,29 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             return 1;
         }
 
+        // Ломание
         float bbX = eng->width - BREAK_BTN_X, bbY = BREAK_BTN_Y;
         float dbx = x - bbX, dby = y - bbY;
         if (sqrtf(dbx*dbx + dby*dby) < ACTION_BTN_SIZE * 1.3f) {
             break_block(eng); return 1;
         }
 
+        // Ставление
         float pbX = eng->width - PLACE_BTN_X, pbY = PLACE_BTN_Y;
         float dpx = x - pbX, dpy = y - pbY;
         if (sqrtf(dpx*dpx + dpy*dpy) < ACTION_BTN_SIZE * 1.3f) {
             place_block(eng); return 1;
         }
 
-        /* ДЖОЙСТИК - ТОЛЬКО ПРИ НАЖАТИИ В ОБЛАСТИ ДЖОЙСТИКА */
+        // Джойстик
         float jx = JOY_X_OFFSET, jy = eng->height - JOY_Y_OFFSET;
         float djx2 = x - jx, djy2 = y - jy;
         float dist = sqrtf(djx2*djx2 + djy2*djy2);
         
-        if (dist < JOY_RADIUS * 2.0f) {  // увеличенная зона для удобства
+        if (dist < JOY_RADIUS * 2.0f) {
             eng->joyTouched = true;
             eng->isMoving = true;
             eng->movePointerId = id;
-            // Рассчитываем направление сразу
             if (dist > 10.0f) {
                 float c = dist > JOY_RADIUS ? JOY_RADIUS : dist;
                 eng->moveDirX = (djx2/dist) * (c/JOY_RADIUS);
@@ -121,7 +104,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             return 1;
         }
         
-        // Если не джойстик - значит взгляд
+        // Взгляд
         eng->lastTouchX = x;
         eng->lastTouchY = y;
         eng->lookPointerId = id;
@@ -135,7 +118,6 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             float y = AMotionEvent_getY(event, i);
             int id = AMotionEvent_getPointerId(event, i);
             
-            // Обработка джойстика - только если он был нажат
             if (id == eng->movePointerId && eng->isMoving && eng->joyTouched) {
                 float dx = x - JOY_X_OFFSET;
                 float dy = y - (eng->height - JOY_Y_OFFSET);
