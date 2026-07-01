@@ -55,8 +55,8 @@ static GLuint load_texture(struct android_app* app, const char* filename) {
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
@@ -204,13 +204,13 @@ static void render_anim_block(struct engine* eng) {
     if (alpha < 1.0f) glDisable(GL_BLEND);
 }
 
-/* 2D текстура блока для инвентаря */
+/* 2D текстура блока для инвентаря - исправлено */
 static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
     float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
     float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
     float s = size / eng->height * 2.0f;
     
-    /* Правильные координаты текстур */
+    /* Правильные UV координаты - текстура не растягивается */
     float verts[] = {
         ndcX - s, ndcY - s, 0.0f, 1.0f,
         ndcX + s, ndcY - s, 1.0f, 1.0f,
@@ -225,6 +225,7 @@ static void render_inv_block_2d(struct engine* eng, float screenX, float screenY
     glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
     glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glUniform4f(glGetUniformLocation(uiProg, "col"), 1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);
     
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
     glEnableVertexAttribArray(0);
@@ -248,7 +249,8 @@ void render_world(struct engine* eng) {
     glUniform1i(glGetUniformLocation(eng->program, "texDown"), 2);
 
     float proj[16], view[16], mvp[16];
-    mat4_perspective(proj, GAME_FOV, (float)eng->width/(float)eng->height, 0.1f, 120.0f);
+    /* Увеличиваем дальность прорисовки с 120 до 200 */
+    mat4_perspective(proj, GAME_FOV, (float)eng->width/(float)eng->height, 0.1f, 200.0f);
     mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
     mat4_mul(mvp, proj, view);
     glUniformMatrix4fv(glGetUniformLocation(eng->program, "m"), 1, GL_FALSE, mvp);
@@ -301,7 +303,6 @@ void init_ui_shader(void) {
     glDeleteShader(fs);
 }
 
-/* Функция для отрисовки без текстуры (чистый цвет) */
 static void draw_rect_no_tex(float cx, float cy, float hw, float hh, int sw, int sh,
                               float cr, float cg, float cb, float ca) {
     float nx = (cx/sw)*2.0f-1.0f, ny = 1.0f-(cy/sh)*2.0f;
@@ -310,33 +311,12 @@ static void draw_rect_no_tex(float cx, float cy, float hw, float hh, int sw, int
                  nx-rw, ny-rh, nx+rw, ny+rh, nx-rw, ny+rh};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
-    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);  // БЕЗ ТЕКСТУРЫ
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES,0,6);
 }
 
-/* Функция для отрисовки с текстурой */
-static void draw_rect_tex(float cx, float cy, float hw, float hh, int sw, int sh,
-                          GLuint tex, float cr, float cg, float cb, float ca) {
-    float nx = (cx/sw)*2.0f-1.0f, ny = 1.0f-(cy/sh)*2.0f;
-    float rw = (hw/sw)*2.0f, rh = (hh/sh)*2.0f;
-    float v[] = {nx-rw, ny-rh, 0, 1, nx+rw, ny-rh, 1, 1, nx+rw, ny+rh, 1, 0,
-                 nx-rw, ny-rh, 0, 1, nx+rw, ny+rh, 1, 0, nx-rw, ny+rh, 0, 0};
-    glUseProgram(uiProg);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
-    glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
-    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);  // С ТЕКСТУРОЙ
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,16,v);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,16,v+2);
-    glEnableVertexAttribArray(1);
-    glDrawArrays(GL_TRIANGLES,0,6);
-}
-
-/* Старые функции переделаны для использования draw_rect_no_tex */
 static void draw_rect(float cx, float cy, float hw, float hh, int sw, int sh,
                       float cr, float cg, float cb, float ca) {
     draw_rect_no_tex(cx, cy, hw, hh, sw, sh, cr, cg, cb, ca);
@@ -535,19 +515,19 @@ void draw_ui(struct engine* eng) {
         float slotX = invStartX + i*(INV_SLOT_SIZE+INV_PADDING) + hs;
         bool sel = (i == eng->selectedSlot);
         
-        // Фон слота (без текстуры)
+        // Фон слота
         if (sel)
             draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.85f,0.85f,0.85f, 0.9f);
         else
             draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.12f,0.12f,0.12f, 0.75f);
         
-        // Обводка (без текстуры)
+        // Обводка
         draw_border(slotX, invY, hs, hs, 2.0f, sw, sh,
                     sel?1.0f:0.35f, sel?1.0f:0.35f, sel?1.0f:0.35f, 1.0f);
         
-        // Блок в слоте (с текстурой)
+        // Блок в слоте
         if (eng->invSlots[i] == BLOCK_GRASS) {
-            render_inv_block_2d(eng, slotX, invY, hs*0.7f);
+            render_inv_block_2d(eng, slotX, invY, hs*0.6f);
         }
     }
 
