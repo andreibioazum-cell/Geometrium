@@ -8,9 +8,6 @@
 
 static int32_t handle_menu_input(struct engine* eng, float x, float y) {
     int sw = eng->width, sh = eng->height;
-    float btnW = 200, btnH = 50;
-
-    /* Цифровые кнопки 0-9 */
     float numStartX = (sw - 10 * 40) / 2.0f;
     float numY = sh / 2.0f;
     if (y > numY - 25 && y < numY + 25 && x > numStartX && x < numStartX + 400) {
@@ -22,7 +19,6 @@ static int32_t handle_menu_input(struct engine* eng, float x, float y) {
         return 1;
     }
 
-    /* Кнопка очистить */
     float clrX = sw / 2.0f - 110, clrY = sh / 2.0f + 60;
     if (x > clrX - 50 && x < clrX + 50 && y > clrY - 25 && y < clrY + 25) {
         eng->seedCursor = 0;
@@ -30,14 +26,13 @@ static int32_t handle_menu_input(struct engine* eng, float x, float y) {
         return 1;
     }
 
-    /* Кнопка играть */
     float playX = sw / 2.0f + 110, playY = sh / 2.0f + 60;
     if (x > playX - 80 && x < playX + 80 && y > playY - 25 && y < playY + 25) {
         int seed = 0;
         for (int i = 0; i < eng->seedCursor; i++)
             seed = seed * 10 + eng->seedDigits[i];
         eng->worldSeed = seed;
-        game_seed = (unsigned int)seed;   // теперь глобальная переменная
+        game_seed = (unsigned int)seed;
         eng->gameState = STATE_PLAYING;
         eng->worldLoaded = false;
         eng->editCount = 0;
@@ -72,7 +67,6 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         if (eng->gameState == STATE_MENU)
             return handle_menu_input(eng, x, y);
 
-        /* Инвентарь */
         float invW = INV_SLOTS * (INV_SLOT_SIZE + INV_PADDING) - INV_PADDING;
         float invStartX = (eng->width - invW) / 2.0f;
         float invY = eng->height - INV_Y_OFFSET;
@@ -85,7 +79,6 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             }
         }
 
-        /* Прыжок */
         float jbX = eng->width - JUMP_BTN_OFFSET;
         float jbY = eng->height - JUMP_BTN_OFFSET;
         float djx = x - jbX, djy = y - jbY;
@@ -94,21 +87,18 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             return 1;
         }
 
-        /* Ломание */
         float bbX = eng->width - BREAK_BTN_X, bbY = BREAK_BTN_Y;
         float dbx = x - bbX, dby = y - bbY;
         if (sqrtf(dbx*dbx + dby*dby) < ACTION_BTN_SIZE * 1.3f) {
             break_block(eng); return 1;
         }
 
-        /* Ставление */
         float pbX = eng->width - PLACE_BTN_X, pbY = PLACE_BTN_Y;
         float dpx = x - pbX, dpy = y - pbY;
         if (sqrtf(dpx*dpx + dpy*dpy) < ACTION_BTN_SIZE * 1.3f) {
             place_block(eng); return 1;
         }
 
-        /* Джойстик */
         if (x < eng->width / 2) {
             eng->joyX = JOY_X_OFFSET;
             eng->joyY = eng->height - JOY_Y_OFFSET;
