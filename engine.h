@@ -76,6 +76,7 @@ struct engine {
     GLuint texGrassTop;
     GLuint texGrassSide;
     GLuint texGrassDown;
+    GLuint texInvBlock;   // <--- НОВОЕ ПОЛЕ для текстуры инвентаря
 
     float camPos[3];
     float camRot[2];
@@ -116,6 +117,8 @@ struct engine {
     int worldSeed;
     int seedDigits[6];
     int seedCursor;
+    
+    bool joyTouched;  // <--- НОВОЕ ПОЛЕ для отслеживания касания джойстика
 };
 
 #endif
