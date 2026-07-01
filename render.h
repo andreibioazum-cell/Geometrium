@@ -54,7 +54,7 @@ static void init_textures(struct engine* eng) {
     if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
 }
 
-/* ===== Шрифт через stb_truetype ===== */
+/* ===== Шрифт ===== */
 
 #define FONT_TEX_W 512
 #define FONT_TEX_H 512
@@ -67,28 +67,15 @@ static stbtt_bakedchar fontChars[FONT_NUM_CHARS];
 static bool fontReady = false;
 static GLuint textProg = 0;
 
-static void init_font(void) {
-    /* Пробуем несколько путей к системному шрифту */
-    const char* paths[] = {
-        "/system/fonts/Roboto-Regular.ttf",
-        "/system/fonts/DroidSans.ttf",
-        "/system/fonts/NotoSans-Regular.ttf",
-        NULL
-    };
+static void init_font(struct engine* eng) {
+    AAssetManager* mgr = eng->app->activity->assetManager;
+    AAsset* asset = AAssetManager_open(mgr, "font.ttf", AASSET_MODE_BUFFER);
+    if (!asset) return;
 
-    FILE* f = NULL;
-    for (int i = 0; paths[i]; i++) {
-        f = fopen(paths[i], "rb");
-        if (f) break;
-    }
-    if (!f) return;
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    size_t fsize = AAsset_getLength(asset);
     unsigned char* ttfBuf = (unsigned char*)malloc(fsize);
-    fread(ttfBuf, 1, fsize, f);
-    fclose(f);
+    AAsset_read(asset, ttfBuf, fsize);
+    AAsset_close(asset);
 
     unsigned char* bitmap = (unsigned char*)calloc(FONT_TEX_W * FONT_TEX_H, 1);
     stbtt_BakeFontBitmap(ttfBuf, 0, FONT_SIZE,
@@ -97,7 +84,6 @@ static void init_font(void) {
                          fontChars);
     free(ttfBuf);
 
-    /* Конвертируем в RGBA для GL */
     unsigned char* rgba = (unsigned char*)malloc(FONT_TEX_W * FONT_TEX_H * 4);
     for (int i = 0; i < FONT_TEX_W * FONT_TEX_H; i++) {
         rgba[i * 4 + 0] = 255;
@@ -172,7 +158,7 @@ static void draw_text(const char* str, float px, float py, float scale,
     float verts[128 * 6 * 4];
     int vi = 0, count = 0;
     float sc = scale / FONT_SIZE;
-    float cx = px, cy = py;
+    float cx = px, cy = py + scale * 0.8f;
 
     for (int i = 0; i < len; i++) {
         int c = (unsigned char)str[i] - FONT_FIRST_CHAR;
@@ -189,7 +175,6 @@ static void draw_text(const char* str, float px, float py, float scale,
         float u1 = (float)b->x1 / FONT_TEX_W;
         float v1 = (float)b->y1 / FONT_TEX_H;
 
-        /* NDC */
         float nx0 = (x0/sw)*2-1, ny0 = 1-(y0/sh)*2;
         float nx1 = (x1/sw)*2-1, ny1 = 1-(y1/sh)*2;
 
@@ -365,33 +350,34 @@ static void draw_border(float cx,float cy,float hw,float hh,float t,int sw,int s
 static void draw_menu(struct engine* eng) {
     int sw=eng->width,sh=eng->height;
     draw_rect(sw/2.f,sh/2.f,sw/2.f,sh/2.f,sw,sh,.18f,.55f,.28f,1);
-    draw_text_centered("GEOMETRIUM",sw/2.f,sh*.15f,48,sw,sh,1,1,1,1);
+
+    draw_text_centered("GEOMETRIUM",sw/2.f,sh*.15f,52,sw,sh,1,1,1,1);
     draw_text_centered("Enter Seed:",sw/2.f,sh*.30f,28,sw,sh,.9f,.9f,.9f,1);
 
     float seedY=sh*.40f;
-    draw_rect(sw/2.f,seedY,120,28,sw,sh,0,0,0,.4f);
-    draw_border(sw/2.f,seedY,120,28,2,sw,sh,.7f,.7f,.7f,1);
+    draw_rect(sw/2.f,seedY,140,32,sw,sh,0,0,0,.4f);
+    draw_border(sw/2.f,seedY,140,32,2,sw,sh,.7f,.7f,.7f,1);
     char seedStr[8]="";
     for(int i=0;i<eng->seedCursor&&i<6;i++){char d[2]={'0'+eng->seedDigits[i],0};strcat(seedStr,d);}
-    if(eng->seedCursor==0)draw_text_centered("------",sw/2.f,seedY,24,sw,sh,.5f,.5f,.5f,1);
-    else draw_text_centered(seedStr,sw/2.f,seedY,24,sw,sh,1,1,1,1);
+    if(eng->seedCursor==0)draw_text_centered("------",sw/2.f,seedY,28,sw,sh,.5f,.5f,.5f,1);
+    else draw_text_centered(seedStr,sw/2.f,seedY,28,sw,sh,1,1,1,1);
 
-    float numY=sh*.55f,totalW=10*42,ns=(sw-totalW)/2.f;
-    for(int i=0;i<=9;i++){float bx=ns+i*42+21;
-        draw_rect(bx,numY,18,20,sw,sh,.15f,.15f,.15f,.85f);
-        draw_border(bx,numY,18,20,1.5f,sw,sh,.5f,.5f,.5f,1);
-        char d[2]={'0'+i,0};draw_text_centered(d,bx,numY,22,sw,sh,1,1,1,1);}
+    float numY=sh*.55f,totalW=10*44,ns=(sw-totalW)/2.f;
+    for(int i=0;i<=9;i++){float bx=ns+i*44+22;
+        draw_rect(bx,numY,20,22,sw,sh,.15f,.15f,.15f,.85f);
+        draw_border(bx,numY,20,22,1.5f,sw,sh,.5f,.5f,.5f,1);
+        char d[2]={'0'+i,0};draw_text_centered(d,bx,numY,26,sw,sh,1,1,1,1);}
 
     float btnY=sh*.70f;
-    float clrX=sw/2.f-100;
-    draw_rect(clrX,btnY,60,24,sw,sh,.6f,.15f,.15f,.9f);
-    draw_border(clrX,btnY,60,24,2,sw,sh,1,.3f,.3f,1);
-    draw_text_centered("Clear",clrX,btnY,20,sw,sh,1,1,1,1);
+    float clrX=sw/2.f-110;
+    draw_rect(clrX,btnY,70,26,sw,sh,.6f,.15f,.15f,.9f);
+    draw_border(clrX,btnY,70,26,2,sw,sh,1,.3f,.3f,1);
+    draw_text_centered("Clear",clrX,btnY,22,sw,sh,1,1,1,1);
 
-    float playX=sw/2.f+100;
-    draw_rect(playX,btnY,60,24,sw,sh,.15f,.55f,.15f,.9f);
-    draw_border(playX,btnY,60,24,2,sw,sh,.3f,1,.3f,1);
-    draw_text_centered("Play",playX,btnY,20,sw,sh,1,1,1,1);
+    float playX=sw/2.f+110;
+    draw_rect(playX,btnY,70,26,sw,sh,.15f,.55f,.15f,.9f);
+    draw_border(playX,btnY,70,26,2,sw,sh,.3f,1,.3f,1);
+    draw_text_centered("Play",playX,btnY,22,sw,sh,1,1,1,1);
 }
 
 static void draw_ui(struct engine* eng){
