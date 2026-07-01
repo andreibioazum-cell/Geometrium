@@ -5,16 +5,15 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 #include <stdbool.h>
+#include <stdint.h>
 
-/* Джойстик зеркально от прыжка */
+// UI Константы
 #define JOY_RADIUS      80.0f
 #define JOY_X_OFFSET    130.0f
 #define JOY_Y_OFFSET    130.0f
 #define STICK_RADIUS    32.0f
-
 #define JUMP_BTN_SIZE   80.0f
 #define JUMP_BTN_OFFSET 130.0f
-
 #define ACTION_BTN_SIZE 45.0f
 #define BREAK_BTN_X     80.0f
 #define BREAK_BTN_Y     80.0f
@@ -22,7 +21,6 @@
 #define PLACE_BTN_Y     190.0f
 
 #define PI              3.14159265f
-
 #define PLAYER_W        0.4f
 #define EYE_H           1.65f
 #define HEAD_MARGIN     0.15f
@@ -44,11 +42,13 @@
 #define FACE_ZN 0x20
 
 #define RAY_DIST        6.0f
-#define RAY_STEP        0.02f
-#define MAX_EDITS       512
+#define RAY_STEP        0.05f
+#define MAX_EDITS       1024
 
 #define BLOCK_AIR       0
 #define BLOCK_GRASS     1
+#define BLOCK_DIRT      2
+#define BLOCK_STONE     3
 
 #define INV_SLOTS       9
 #define INV_SLOT_SIZE   46.0f
@@ -56,9 +56,8 @@
 #define INV_Y_OFFSET    50.0f
 
 #define ANIM_BREAK_FRAMES 12
-#define ANIM_PLACE_FRAMES 8
+#define ANIM_PLACE_FRAMES 10
 
-/* Состояния игры */
 #define STATE_MENU      0
 #define STATE_PLAYING   1
 
@@ -73,11 +72,12 @@ struct engine {
     EGLSurface surface;
     EGLContext context;
     int32_t width, height;
+    
     GLuint program;
+    GLuint uiProgram;
     GLuint invProgram;
-    GLuint texGrassTop;
-    GLuint texGrassSide;
-    GLuint texGrassDown;
+    GLuint texGrassTop, texGrassSide, texGrassDown;
+    GLuint vbo;
 
     float camPos[3];
     float camRot[2];
@@ -92,15 +92,15 @@ struct engine {
     int lookPointerId;
     bool onGround;
 
-    GLuint vbo;
     int visibleFaceCount;
     bool meshDirty;
 
     int loadCenterX, loadCenterZ;
     bool worldLoaded;
 
-    unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
-    unsigned char faces[WORLD_BUF][CHUNK_H][WORLD_BUF];
+    // Динамическая память для мира
+    unsigned char (*blocks)[CHUNK_H][WORLD_BUF];
+    unsigned char (*faces)[CHUNK_H][WORLD_BUF];
 
     struct block_edit edits[MAX_EDITS];
     int editCount;
@@ -108,16 +108,15 @@ struct engine {
     unsigned char invSlots[INV_SLOTS];
     int selectedSlot;
 
-    /* Анимация блока */
-    int animBreakTimer;
-    int animPlaceTimer;
-    float animBlockX, animBlockY, animBlockZ;
+    // Анимация
     bool animActive;
     bool animIsBreak;
+    int animTimer;
+    float animBlockPos[3];
+    unsigned char animBlockType;
 
-    /* Меню */
     int gameState;
-    int worldSeed;
+    unsigned int worldSeed;
     int seedDigits[6];
     int seedCursor;
 };
