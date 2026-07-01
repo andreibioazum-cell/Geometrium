@@ -8,7 +8,7 @@
 #include "math_utils.h"
 #include "physics.h"
 #include "input.h"
-#include "render.h"
+#include "render.h"   // <--- ЭТО БЫЛО ПРОПУЩЕНО!
 
 #define LOG_TAG "Geometrium"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
