@@ -76,6 +76,9 @@ void init_textures(struct engine* eng) {
     eng->texGrassTop = load_texture(eng->app, "grass_top.png");
     eng->texGrassSide = load_texture(eng->app, "grass_side.png");
     eng->texGrassDown = load_texture(eng->app, "grass_down.png");
+    /* Текстура для инвентаря (2D вид сбоку) */
+    eng->texInvBlock = load_texture(eng->app, "inv_block.png");
+    if (!eng->texInvBlock) eng->texInvBlock = make_color_tex(120, 100, 70);
     if (!eng->texGrassTop) eng->texGrassTop = make_color_tex(100, 180, 60);
     if (!eng->texGrassSide) eng->texGrassSide = make_color_tex(120, 100, 70);
     if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
@@ -201,38 +204,31 @@ static void render_anim_block(struct engine* eng) {
     if (alpha < 1.0f) glDisable(GL_BLEND);
 }
 
-static void render_inv_block_3d(struct engine* eng, float screenX, float screenY, float size) {
-    glUseProgram(eng->invProgram);
-    glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, eng->texGrassTop);
-    glUniform1i(glGetUniformLocation(eng->invProgram, "texTop"), 0);
-    glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
-    glUniform1i(glGetUniformLocation(eng->invProgram, "texSide"), 1);
-
-    float aspect = (float)eng->width / (float)eng->height;
+/* 2D текстура блока для инвентаря */
+static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
     float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
     float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
-    float s = (size / eng->height) * 2.0f;
-
-    glUniform2f(glGetUniformLocation(eng->invProgram, "offset"), ndcX, ndcY);
-    glUniform1f(glGetUniformLocation(eng->invProgram, "scale"), s);
-    glUniform1f(glGetUniformLocation(eng->invProgram, "aspect"), aspect);
-
+    float s = size / eng->height * 2.0f;
+    
     float verts[] = {
-         0, 1, 0, 0,0, 0,   -1, 0, 0, 0,1, 0,    0, 0,-1, 1,1, 0,
-         0, 1, 0, 0,0, 0,    0, 0,-1, 1,1, 0,     1, 0, 0, 1,0, 0,
-        -1, 0, 0, 0,0, 1,   -1,-1, 0, 0,1, 1,     0,-1,-1, 1,1, 1,
-        -1, 0, 0, 0,0, 1,    0,-1,-1, 1,1, 1,     0, 0,-1, 1,0, 1,
-         0, 0,-1, 0,0, 2,    0,-1,-1, 0,1, 2,     1,-1, 0, 1,1, 2,
-         0, 0,-1, 0,0, 2,    1,-1, 0, 1,1, 2,     1, 0, 0, 1,0, 2,
+        ndcX - s, ndcY - s, 0, 0,
+        ndcX + s, ndcY - s, 1, 0,
+        ndcX + s, ndcY + s, 1, 1,
+        ndcX - s, ndcY - s, 0, 0,
+        ndcX + s, ndcY + s, 1, 1,
+        ndcX - s, ndcY + s, 0, 1
     };
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, verts);
+    
+    glUseProgram(uiProg);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, eng->texInvBlock);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 24, verts + 3);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, verts + 2);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 24, verts + 5);
-    glEnableVertexAttribArray(2);
-    glDrawArrays(GL_TRIANGLES, 0, 18);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 void render_world(struct engine* eng) {
@@ -266,11 +262,22 @@ void render_world(struct engine* eng) {
 }
 
 /* ============= UI ============= */
-static GLuint uiProg = 0;
+GLuint uiProg = 0;
 
 void init_ui_shader(void) {
-    const char* vS = "attribute vec4 p; void main(){gl_Position=p;}";
-    const char* fS = "precision mediump float;uniform vec4 col;void main(){gl_FragColor=col;}";
+    const char* vS = 
+        "attribute vec2 aPos;attribute vec2 aUV;"
+        "varying vec2 vUV;"
+        "void main(){gl_Position=vec4(aPos,0.0,1.0);vUV=aUV;}";
+    const char* fS = 
+        "precision mediump float;"
+        "varying vec2 vUV;"
+        "uniform vec4 col;"
+        "uniform sampler2D tex;"
+        "void main(){"
+        "  vec4 t=texture2D(tex,vUV);"
+        "  gl_FragColor=col*t;"
+        "}";
     GLuint vs = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vs, 1, &vS, NULL);
     glCompileShader(vs);
@@ -293,6 +300,8 @@ static void draw_rect(float cx, float cy, float hw, float hh, int sw, int sh,
                  nx-rw, ny-rh, nx+rw, ny+rh, nx-rw, ny+rh};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
+    // Отключаем текстуру
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES,0,6);
@@ -315,6 +324,7 @@ static void draw_ring(float cx, float cy, float r, float thick, int w, int h,
     }
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,verts);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLE_STRIP,0,(segs+1)*2);
@@ -334,6 +344,7 @@ static void draw_circle(float cx, float cy, float r, int w, int h,
     }
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,verts);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLE_FAN,0,segs+2);
@@ -410,6 +421,7 @@ void draw_menu(struct engine* eng) {
     float play[] = {pnx-pax,pny+pay, pnx-pax,pny-pay, pnx+pax,pny};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"),1,1,1,1);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,play);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES,0,3);
@@ -434,7 +446,7 @@ void draw_ui(struct engine* eng) {
     draw_rect(cx, cy, 10, 1, sw, sh, 1,1,1,1);
     draw_rect(cx, cy, 1, 10, sw, sh, 1,1,1,1);
 
-    // Джойстик
+    // Джойстик - всегда рисуем в одной позиции
     float jx = JOY_X_OFFSET, jy = sh - JOY_Y_OFFSET;
     draw_ring(jx, jy, JOY_RADIUS, 3, sw, sh, 0,0,0,1);
     draw_circle(jx + eng->moveDirX*JOY_RADIUS*0.6f,
@@ -450,6 +462,7 @@ void draw_ui(struct engine* eng) {
     float arrow[] = {anx, any+aay, anx-aax, any-aay*0.5f, anx+aax, any-aay*0.5f};
     glUseProgram(uiProg);
     glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow);
     glEnableVertexAttribArray(0);
     glDrawArrays(GL_TRIANGLES,0,3);
@@ -463,6 +476,7 @@ void draw_ui(struct engine* eng) {
     float d1[] = {xnx-xs-xwn,xny+ys, xnx-xs+xwn,xny+ys, xnx+xs+xwn,xny-ys,
                   xnx-xs-xwn,xny+ys, xnx+xs+xwn,xny-ys, xnx+xs-xwn,xny-ys};
     glUniform4f(glGetUniformLocation(uiProg,"col"),0,0,0,1);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,d1);
     glDrawArrays(GL_TRIANGLES,0,6);
     float d2[] = {xnx+xs-xwn,xny+ys, xnx+xs+xwn,xny+ys, xnx-xs+xwn,xny-ys,
@@ -476,7 +490,7 @@ void draw_ui(struct engine* eng) {
     draw_rect(pbx,pby,ACTION_BTN_SIZE*0.3f,2.5f,sw,sh,0,0,0,1);
     draw_rect(pbx,pby,2.5f,ACTION_BTN_SIZE*0.3f,sw,sh,0,0,0,1);
 
-    // Инвентарь
+    // Инвентарь - с 2D текстурой блока
     float invW = INV_SLOTS*(INV_SLOT_SIZE+INV_PADDING)-INV_PADDING;
     float invStartX = (sw-invW)/2.0f;
     float invY = sh-INV_Y_OFFSET;
@@ -492,10 +506,7 @@ void draw_ui(struct engine* eng) {
         draw_border(slotX, invY, hs, hs, 2.0f, sw, sh,
                     sel?1:0.35f, sel?1:0.35f, sel?1:0.35f, 1);
         if (eng->invSlots[i] == BLOCK_GRASS) {
-            glDisable(GL_BLEND);
-            render_inv_block_3d(eng, slotX, invY, hs*0.7f);
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            render_inv_block_2d(eng, slotX, invY, hs*0.6f);
         }
     }
 
