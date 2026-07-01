@@ -1,4 +1,4 @@
- #ifndef PHYSICS_H
+#ifndef PHYSICS_H
 #define PHYSICS_H
 
 #include <stdbool.h>
@@ -59,7 +59,9 @@ static void apply_physics(struct engine* eng) {
     }
 
     if (eng->isMoving && (eng->moveDirX != 0 || eng->moveDirZ != 0)) {
-        float speed = 0.08f, yaw = eng->camRot[1];
+        // Скорость уменьшена с 0.08f до 0.076f (на 5%)
+        float speed = 0.076f;  // было 0.08f
+        float yaw = eng->camRot[1];
         float fX = sinf(yaw), fZ = -cosf(yaw), rX = cosf(yaw), rZ = sinf(yaw);
         float dx = (fX * -eng->moveDirZ + rX * eng->moveDirX) * speed;
         float dz = (fZ * -eng->moveDirZ + rZ * eng->moveDirX) * speed;
