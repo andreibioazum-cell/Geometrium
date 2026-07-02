@@ -83,7 +83,7 @@ void init_textures(struct engine* eng) {
     if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
 }
 
-/* ============= ПОСТРОЕНИЕ VBO (один для всех блоков) ============= */
+/* ============= ПОСТРОЕНИЕ VBO ============= */
 static void push_quad_n(float* buf, int* idx,
     float x0,float y0,float z0,float u0,float v0,
     float x1,float y1,float z1,float u1,float v1,
@@ -91,9 +91,12 @@ static void push_quad_n(float* buf, int* idx,
     float x3,float y3,float z3,float u3,float v3,
     float nx,float ny,float nz) {
     float vd[6][8] = {
-        {x0,y0,z0,u0,v0,nx,ny,nz},{x1,y1,z1,u1,v1,nx,ny,nz},
-        {x2,y2,z2,u2,v2,nx,ny,nz},{x0,y0,z0,u0,v0,nx,ny,nz},
-        {x2,y2,z2,u2,v2,nx,ny,nz},{x3,y3,z3,u3,v3,nx,ny,nz}};
+        {x0,y0,z0,u0,v0,nx,ny,nz},
+        {x1,y1,z1,u1,v1,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz},
+        {x0,y0,z0,u0,v0,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz},
+        {x3,y3,z3,u3,v3,nx,ny,nz}};
     memcpy(&buf[*idx], vd, sizeof(vd));
     *idx += 48;
 }
@@ -129,12 +132,12 @@ static void rebuild_vbo(struct engine* eng) {
                 unsigned char f = eng->faces[x][y][z]; if(!f) continue;
                 float bx=(float)(ox+x),by=(float)y,bz=(float)(-(oz+z));
                 float x0=bx-.5f,x1=bx+.5f,y0=by-.5f,y1=by+.5f,z0=bz-.5f,z1=bz+.5f;
-                if(f&FACE_XP)push_quad_n(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0,1,0,0);
-                if(f&FACE_XN)push_quad_n(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0);
-                if(f&FACE_YP)push_quad_n(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1,0,1,0);
-                if(f&FACE_YN)push_quad_n(buf,&idx,x0,y0,z0,0,0,x1,y0,z0,1,0,x1,y0,z1,1,1,x0,y0,z1,0,1,0,-1,0);
-                if(f&FACE_ZP)push_quad_n(buf,&idx,x1,y0,z0,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x1,y1,z0,0,0,0,0,-1);
-                if(f&FACE_ZN)push_quad_n(buf,&idx,x0,y0,z1,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x0,y1,z1,0,0,0,0,1);
+                if(f&FACE_XP)push_quad_n(buf,&idx,x1,y0,z0,1,1,x1,y0,z1,0,1,x1,y1,z1,0,0,x1,y1,z0,1,0,1,0,0);
+                if(f&FACE_XN)push_quad_n(buf,&idx,x0,y0,z1,1,1,x0,y0,z0,0,1,x0,y1,z0,0,0,x0,y1,z1,1,0,-1,0,0);
+                if(f&FACE_YP)push_quad_n(buf,&idx,x0,y1,z1,1,1,x1,y1,z1,0,1,x1,y1,z0,0,0,x0,y1,z0,1,0,0,1,0);
+                if(f&FACE_YN)push_quad_n(buf,&idx,x0,y0,z0,1,1,x1,y0,z0,0,1,x1,y0,z1,0,0,x0,y0,z1,1,0,0,-1,0);
+                if(f&FACE_ZP)push_quad_n(buf,&idx,x1,y0,z0,1,1,x0,y0,z0,0,1,x0,y1,z0,0,0,x1,y1,z0,1,0,0,0,-1);
+                if(f&FACE_ZN)push_quad_n(buf,&idx,x0,y0,z1,1,1,x1,y0,z1,0,1,x1,y1,z1,0,0,x0,y1,z1,1,0,0,0,1);
             }
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
@@ -144,44 +147,59 @@ static void rebuild_vbo(struct engine* eng) {
     eng->meshDirty = false;
 }
 
-/* ============= АНИМАЦИЯ БЛОКА (без изменений) ============= */
+/* ============= АНИМАЦИЯ БЛОКА (исправлена) ============= */
 static void render_anim_block(struct engine* eng) {
     if (!eng->animActive) return;
-    float scale, alpha = 1.0f;
+
+    float scale = 1.0f;
+    float alpha = 1.0f;
     float shakeX = 0, shakeY = 0;
+
     if (eng->animIsBreak) {
-        float t = (float)eng->animBreakTimer / ANIM_BREAK_FRAMES;
-        if (t > 0.3f) {
-            scale = 1.0f;
-            shakeX = sinf(t * 40.0f) * 0.06f * t;
-            shakeY = cosf(t * 35.0f) * 0.04f * t;
-        } else {
-            scale = t / 0.3f;
-            alpha = t / 0.3f;
-        }
+        float t = (float)(ANIM_BREAK_FRAMES - eng->animBreakTimer) / ANIM_BREAK_FRAMES;
+        scale = 1.0f - t * 0.3f;
+        if (scale < 0.1f) scale = 0.1f;
+        alpha = 1.0f - t;
+        shakeX = sinf(t * 50.0f) * 0.08f * (1.0f - t);
+        shakeY = cosf(t * 45.0f) * 0.05f * (1.0f - t);
         eng->animBreakTimer--;
         if (eng->animBreakTimer <= 0) eng->animActive = false;
     } else {
-        float t = (float)eng->animPlaceTimer / ANIM_PLACE_FRAMES;
-        float progress = 1.0f - t;
-        scale = progress * (1.0f + sinf(progress * PI) * 0.2f);
+        float t = (float)(ANIM_PLACE_FRAMES - eng->animPlaceTimer) / ANIM_PLACE_FRAMES;
+        scale = 0.3f + t * 0.7f;
+        alpha = 0.5f + t * 0.5f;
+        float bounce = 1.0f + sinf(t * PI) * 0.15f * (1.0f - t);
+        scale *= bounce;
         if (scale > 1.0f) scale = 1.0f;
         eng->animPlaceTimer--;
-        if (eng->animPlaceTimer <= 0) eng->animActive = false;
+        if (eng->animPlaceTimer <= 0) {
+            eng->animActive = false;
+            scale = 1.0f;
+            alpha = 1.0f;
+        }
     }
+
     if (scale <= 0.01f) return;
+
     float bx = eng->animBlockX + shakeX;
     float by = eng->animBlockY + shakeY;
     float bz = eng->animBlockZ;
     float hs = scale * 0.5f;
-    float abuf[6 * 48]; int aidx = 0;
-    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,0,0,1,0,0);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx-hs,by+hs,bz+hs,0,0,-1,0,0);
-    push_quad_n(abuf,&aidx,bx-hs,by+hs,bz+hs,0,0,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,0,1,0,1,0);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz-hs,0,0,bx+hs,by-hs,bz-hs,1,0,bx+hs,by-hs,bz+hs,1,1,bx-hs,by-hs,bz+hs,0,1,0,-1,0);
-    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx+hs,by+hs,bz-hs,0,0,0,0,-1);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx-hs,by+hs,bz+hs,0,0,0,0,1);
-    if (alpha < 1.0f) { glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); }
+
+    float abuf[6 * 48]; 
+    int aidx = 0;
+    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,1,1,bx+hs,by-hs,bz+hs,0,1,bx+hs,by+hs,bz+hs,0,0,bx+hs,by+hs,bz-hs,1,0,1,0,0);
+    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,1,1,bx-hs,by-hs,bz-hs,0,1,bx-hs,by+hs,bz-hs,0,0,bx-hs,by+hs,bz+hs,1,0,-1,0,0);
+    push_quad_n(abuf,&aidx,bx-hs,by+hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,0,1,bx+hs,by+hs,bz-hs,0,0,bx-hs,by+hs,bz-hs,1,0,0,1,0);
+    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz-hs,1,1,bx+hs,by-hs,bz-hs,0,1,bx+hs,by-hs,bz+hs,0,0,bx-hs,by-hs,bz+hs,1,0,0,-1,0);
+    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,1,1,bx-hs,by-hs,bz-hs,0,1,bx-hs,by+hs,bz-hs,0,0,bx+hs,by+hs,bz-hs,1,0,0,0,-1);
+    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,1,1,bx+hs,by-hs,bz+hs,0,1,bx+hs,by+hs,bz+hs,0,0,bx-hs,by+hs,bz+hs,1,0,0,0,1);
+
+    if (alpha < 1.0f) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, abuf);
     glEnableVertexAttribArray(0);
@@ -190,13 +208,17 @@ static void render_anim_block(struct engine* eng) {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 32, abuf + 5);
     glEnableVertexAttribArray(2);
     glDrawArrays(GL_TRIANGLES, 0, 36);
+
     if (alpha < 1.0f) glDisable(GL_BLEND);
 }
 
 /* ============= ОТРИСОВКА МИРА ============= */
 void render_world(struct engine* eng) {
     if (eng->meshDirty) rebuild_vbo(eng);
-    if (eng->visibleFaceCount == 0) return;
+    if (eng->visibleFaceCount == 0) {
+        render_anim_block(eng);
+        return;
+    }
     glEnable(GL_DEPTH_TEST);
     glUseProgram(eng->program);
     glUniform3f(glGetUniformLocation(eng->program, "camPos"),
@@ -347,75 +369,57 @@ static void draw_circle(float cx, float cy, float r, int w, int h,
     glDrawArrays(GL_TRIANGLE_FAN,0,segs+2);
 }
 
-/* ============= МЕНЮ ============= */
+/* ============= МЕНЮ (только кнопка Play) ============= */
 void draw_menu(struct engine* eng) {
     int sw = eng->width, sh = eng->height;
-    draw_rect_no_tex(sw/2.0f, sh/2.0f, sw/2.0f, sh/2.0f, sw, sh, 0.2f,0.6f,0.3f, 1);
-    float titleY = sh * 0.25f;
-    draw_rect_no_tex(sw/2.0f, titleY, 120, 25, sw, sh, 0,0,0, 0.3f);
-    draw_digit(sw/2.0f - 60, titleY, 18, 5, sw, sh, 1,1,1);
-    draw_digit(sw/2.0f - 20, titleY, 18, 3, sw, sh, 1,1,1);
-    draw_digit(sw/2.0f + 20, titleY, 18, 3, sw, sh, 1,1,1);
-    draw_digit(sw/2.0f + 60, titleY, 18, 0, sw, sh, 1,1,1);
-
-    float seedY = sh * 0.38f;
-    draw_rect_no_tex(sw/2.0f, seedY, 100, 22, sw, sh, 0,0,0, 0.4f);
-    for (int i = 0; i < eng->seedCursor; i++) {
-        float dx = (i - eng->seedCursor * 0.5f + 0.5f) * 28;
-        draw_digit(sw/2.0f + dx, seedY, 14, eng->seedDigits[i], sw, sh, 1,1,1);
-    }
-    if (eng->seedCursor < 6) {
-        float cx = sw/2.0f + (eng->seedCursor - eng->seedCursor*0.5f + 0.5f) * 28;
-        draw_rect_no_tex(cx, seedY, 1.5f, 12, sw, sh, 1,1,1, 0.7f);
-    }
-
-    float numY = sh * 0.52f;
-    float numStartX = (sw - 10 * 40) / 2.0f;
-    for (int i = 0; i <= 9; i++) {
-        float bx = numStartX + i * 40 + 20;
-        draw_rect_no_tex(bx, numY, 16, 16, sw, sh, 0.15f,0.15f,0.15f, 0.8f);
-        draw_border(bx, numY, 16, 16, 1.5f, sw, sh, 0.5f,0.5f,0.5f, 1);
-        draw_digit(bx, numY, 10, i, sw, sh, 1,1,1);
-    }
-
-    float clrX = sw/2.0f - 110, btnY = sh * 0.65f;
-    draw_rect_no_tex(clrX, btnY, 45, 22, sw, sh, 0.6f,0.15f,0.15f, 0.9f);
-    draw_border(clrX, btnY, 45, 22, 2, sw, sh, 1,0.3f,0.3f, 1);
-    draw_digit(clrX, btnY, 12, 0, sw, sh, 1,1,1);
-
-    float playX = sw/2.0f + 110;
-    draw_rect_no_tex(playX, btnY, 70, 22, sw, sh, 0.15f,0.5f,0.15f, 0.9f);
-    draw_border(playX, btnY, 70, 22, 2, sw, sh, 0.3f,1,0.3f, 1);
-    float pnx = (playX/sw)*2-1, pny = 1-(btnY/sh)*2;
-    float pax = (15.0f/sw)*2, pay = (15.0f/sh)*2;
-    float play[] = {pnx-pax,pny+pay, pnx-pax,pny-pay, pnx+pax,pny};
+    
+    // Фон
+    draw_rect_no_tex(sw/2.0f, sh/2.0f, sw/2.0f, sh/2.0f, sw, sh, 0.2f, 0.6f, 0.3f, 1.0f);
+    
+    // Название
+    float titleY = sh * 0.3f;
+    draw_rect_no_tex(sw/2.0f, titleY, 150, 40, sw, sh, 0, 0, 0, 0.4f);
+    
+    // Кнопка PLAY
+    float playX = sw/2.0f, playY = sh * 0.55f;
+    draw_rect_no_tex(playX, playY, 80, 30, sw, sh, 0.15f, 0.5f, 0.15f, 0.9f);
+    draw_border(playX, playY, 80, 30, 3, sw, sh, 0.3f, 1.0f, 0.3f, 1.0f);
+    
+    // Треугольник Play
+    float pnx = (playX/sw)*2-1, pny = 1-(playY/sh)*2;
+    float pax = (20.0f/sw)*2, pay = (20.0f/sh)*2;
+    float play[] = {pnx-pax, pny+pay, pnx-pax, pny-pay, pnx+pax, pny};
     glUseProgram(uiProg);
-    glUniform4f(glGetUniformLocation(uiProg,"col"),1,1,1,1);
+    glUniform4f(glGetUniformLocation(uiProg,"col"), 1.0f, 1.0f, 1.0f, 1.0f);
     glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
-    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,play);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, play);
     glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES,0,3);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-/* ============= UI ИГРЫ (инвентарь с единой текстурой) ============= */
+/* ============= UI ИГРЫ (инвентарь с правильными UV) ============= */
 static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
     float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
     float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
     float s = size / eng->height * 2.0f;
+    
+    // Правильные UV координаты для квадрата
     float verts[] = {
-        ndcX - s, ndcY - s, 0.0f, 1.0f,
-        ndcX + s, ndcY - s, 1.0f, 1.0f,
-        ndcX + s, ndcY + s, 1.0f, 0.0f,
-        ndcX - s, ndcY - s, 0.0f, 1.0f,
-        ndcX + s, ndcY + s, 1.0f, 0.0f,
-        ndcX - s, ndcY + s, 0.0f, 0.0f
+        ndcX - s, ndcY - s, 0.0f, 0.0f,
+        ndcX + s, ndcY - s, 1.0f, 0.0f,
+        ndcX + s, ndcY + s, 1.0f, 1.0f,
+        ndcX - s, ndcY - s, 0.0f, 0.0f,
+        ndcX + s, ndcY + s, 1.0f, 1.0f,
+        ndcX - s, ndcY + s, 0.0f, 1.0f
     };
+    
     glUseProgram(uiProg);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
     glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
     glUniform4f(glGetUniformLocation(uiProg, "col"), 1.0f, 1.0f, 1.0f, 1.0f);
     glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);
+    
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, verts + 2);
