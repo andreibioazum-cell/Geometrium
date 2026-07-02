@@ -70,7 +70,7 @@ static void engine_draw_frame(struct engine* eng) {
 }
 
 static void init_inv_shader(struct engine* eng) {
-    // Заглушка, т.к. не используется
+    // Заглушка
 }
 
 static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
@@ -162,12 +162,10 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         init_textures(eng);
         init_ui_shader();
         init_inv_shader(eng);
-
-        if (eng->seedCursor == 0) {
-            srand(time(NULL));
-            game_seed = (unsigned int)rand();
-            eng->worldSeed = (int)game_seed;
-        }
+        
+        srand(time(NULL));
+        game_seed = (unsigned int)rand();
+        eng->worldSeed = (int)game_seed;
     }
 }
 
@@ -179,10 +177,9 @@ void android_main(struct android_app* state) {
     eng.meshDirty = true;
     eng.selectedSlot = 0;
     eng.gameState = STATE_MENU;
-    eng.seedCursor = 0;
     eng.joyTouched = false;
     eng.vbo = 0;
-    // Начальный инвентарь: трава, дерево, листва – все выглядят как трава
+    
     eng.invSlots[0] = BLOCK_GRASS;
     eng.invSlots[1] = BLOCK_WOOD;
     eng.invSlots[2] = BLOCK_LEAVES;
