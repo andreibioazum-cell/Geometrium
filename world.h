@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
 #include "engine.h"
 #include "math_utils.h"
 
@@ -79,11 +80,16 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
     return eng->blocks[bx][wy][bz];
 }
 
-/* ----- Генерация дерева (ствол и крона) ----- */
-static void generate_tree(struct engine* eng, int baseX, int baseZ, int height) {
+/* ----- Генерация дерева (упрощённая, но с гарантией появления) ----- */
+static void generate_tree(struct engine* eng, int baseX, int baseZ) {
+    int height = 5 + (int)(fbm_noise((float)baseX, (float)baseZ) * 3) % 3; // 5-7 блоков
+    int groundY = get_height(baseX, baseZ);
+    
     // Ствол
     for (int y = 1; y <= height; y++) {
-        int wx = baseX, wy = get_height(baseX, baseZ) + y, wz = baseZ;
+        int wx = baseX;
+        int wy = groundY + y;
+        int wz = baseZ;
         if (wy >= 0 && wy < CHUNK_H) {
             int bx, bz;
             world_to_buf(eng, wx, wz, &bx, &bz);
@@ -91,14 +97,16 @@ static void generate_tree(struct engine* eng, int baseX, int baseZ, int height) 
                 eng->blocks[bx][wy][bz] = BLOCK_WOOD;
         }
     }
-    // Крона (листва)
+    
+    // Крона - простая сфера
     int crownRadius = 2;
     for (int dx = -crownRadius; dx <= crownRadius; dx++) {
         for (int dz = -crownRadius; dz <= crownRadius; dz++) {
-            for (int dy = height - 1; dy <= height + 1; dy++) {
-                if (dx*dx + dz*dz + (dy - height)*(dy - height) <= crownRadius*crownRadius + 1) {
+            for (int dy = height - 2; dy <= height + 1; dy++) {
+                int dist = dx*dx + dz*dz + (dy - height)*(dy - height);
+                if (dist <= crownRadius*crownRadius + 2) {
                     int wx = baseX + dx;
-                    int wy = get_height(baseX, baseZ) + dy;
+                    int wy = groundY + dy;
                     int wz = baseZ + dz;
                     if (wy >= 0 && wy < CHUNK_H) {
                         int bx, bz;
@@ -130,15 +138,37 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
         }
     }
 
-    // Деревья (на траве)
-    for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
-        for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
-            int wx = cx + dx, wz = cz + dz;
-            int h = get_height(wx, wz);
-            float noiseVal = fbm_noise((float)wx * 0.1f, (float)wz * 0.1f);
-            if (h >= 4 && noiseVal > 0.6f && (dx*dx + dz*dz) > 4) {
-                int treeHeight = 4 + (int)(noiseVal * 2) % 3;
-                generate_tree(eng, wx, wz, treeHeight);
+    // Деревья - гарантированно появляются на траве
+    int treeCount = 0;
+    int attempts = 0;
+    while (treeCount < 20 && attempts < 200) {
+        attempts++;
+        int dx = (rand() % (LOAD_RADIUS * 2)) - LOAD_RADIUS;
+        int dz = (rand() % (LOAD_RADIUS * 2)) - LOAD_RADIUS;
+        int wx = cx + dx, wz = cz + dz;
+        int h = get_height(wx, wz);
+        
+        // Проверяем, что место подходит для дерева
+        if (h >= 4 && h < CHUNK_H - 6) {
+            // Проверяем, что рядом нет других деревьев
+            bool hasTree = false;
+            for (int tx = -3; tx <= 3 && !hasTree; tx++) {
+                for (int tz = -3; tz <= 3 && !hasTree; tz++) {
+                    int bx, bz;
+                    world_to_buf(eng, wx + tx, wz + tz, &bx, &bz);
+                    if (bx >= 0 && bx < WORLD_BUF && bz >= 0 && bz < WORLD_BUF) {
+                        for (int y = h; y < h + 6; y++) {
+                            if (y < CHUNK_H && eng->blocks[bx][y][bz] != BLOCK_AIR) {
+                                hasTree = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (!hasTree) {
+                generate_tree(eng, wx, wz);
+                treeCount++;
             }
         }
     }
