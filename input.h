@@ -1,212 +1,171 @@
+#ifndef INPUT_H
+#define INPUT_H
+
 #include <android_native_app_glue.h>
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
-#include <android/log.h>
+#include <math.h>
 #include <stdlib.h>
 #include <time.h>
-
 #include "engine.h"
 #include "world.h"
-#include "math_utils.h"
-#include "physics.h"
-#include "input.h"
 #include "render.h"
 
-#define LOG_TAG "Geometrium"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+static int32_t handle_menu_input(struct engine* eng, float x, float y) {
+    int sw = eng->width, sh = eng->height;
 
-unsigned int game_seed = 0;
-
-static int check_shader(GLuint shader, const char* name) {
-    GLint status;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-    if (!status) {
-        char log[512];
-        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
-        LOGE("Shader %s compile error: %s", name, log);
-        return 0;
-    }
-    return 1;
-}
-
-static int check_program(GLuint prog, const char* name) {
-    GLint status;
-    glGetProgramiv(prog, GL_LINK_STATUS, &status);
-    if (!status) {
-        char log[512];
-        glGetProgramInfoLog(prog, sizeof(log), NULL, log);
-        LOGE("Program %s link error: %s", name, log);
-        return 0;
-    }
-    return 1;
-}
-
-static void engine_draw_frame(struct engine* eng) {
-    if (!eng->display) return;
-    eglQuerySurface(eng->display, eng->surface, EGL_WIDTH, &eng->width);
-    eglQuerySurface(eng->display, eng->surface, EGL_HEIGHT, &eng->height);
-    glViewport(0, 0, eng->width, eng->height);
-
-    if (eng->gameState == STATE_MENU) {
-        glClearColor(0.2f, 0.6f, 0.3f, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDisable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        draw_menu(eng);
-        glDisable(GL_BLEND);
-        eglSwapBuffers(eng->display, eng->surface);
-        return;
-    }
-
-    update_world(eng);
-    apply_physics(eng);
-    glClearColor(0.53f, 0.81f, 0.98f, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    render_world(eng);
-    draw_ui(eng);
-    eglSwapBuffers(eng->display, eng->surface);
-}
-
-static void init_inv_shader(struct engine* eng) {
-    // Заглушка
-}
-
-static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
-    struct engine* eng = (struct engine*)app->userData;
-    if (cmd == APP_CMD_INIT_WINDOW) {
-        eng->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-        if (eng->display == EGL_NO_DISPLAY) {
-            LOGE("eglGetDisplay failed");
-            return;
-        }
-        if (!eglInitialize(eng->display, NULL, NULL)) {
-            LOGE("eglInitialize failed");
-            return;
-        }
-
-        EGLConfig config;
-        EGLint n;
-        EGLint att[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-                         EGL_DEPTH_SIZE, 16,
-                         EGL_NONE };
-        if (!eglChooseConfig(eng->display, att, &config, 1, &n) || n == 0) {
-            LOGE("eglChooseConfig failed");
-            return;
-        }
-
-        eng->surface = eglCreateWindowSurface(eng->display, config, eng->app->window, NULL);
-        if (eng->surface == EGL_NO_SURFACE) {
-            LOGE("eglCreateWindowSurface failed");
-            return;
-        }
-
-        EGLint ctxAtt[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
-        eng->context = eglCreateContext(eng->display, config, NULL, ctxAtt);
-        if (eng->context == EGL_NO_CONTEXT) {
-            LOGE("eglCreateContext failed");
-            return;
-        }
-
-        if (!eglMakeCurrent(eng->display, eng->surface, eng->surface, eng->context)) {
-            LOGE("eglMakeCurrent failed");
-            return;
-        }
-
-        const char* vS =
-            "attribute vec3 pos;attribute vec2 uv;attribute vec3 norm;"
-            "varying vec2 vUV;varying vec3 vNorm;varying vec3 vWorldPos;"
-            "uniform mat4 m;"
-            "void main(){gl_Position=m*vec4(pos,1.0);vUV=uv;vNorm=norm;vWorldPos=pos;}";
-        const char* fS =
-            "precision mediump float;"
-            "varying vec2 vUV;varying vec3 vNorm;varying vec3 vWorldPos;"
-            "uniform vec3 camPos;uniform sampler2D texTop,texSide,texDown;"
-            "void main(){"
-            "  vec4 tc;if(vNorm.y>0.5)tc=texture2D(texTop,vUV);"
-            "  else if(vNorm.y<-0.5)tc=texture2D(texDown,vUV);"
-            "  else tc=texture2D(texSide,vUV);"
-            "  vec3 sun=normalize(vec3(0.35,0.85,0.4));"
-            "  float diff=max(dot(vNorm,sun),0.0),amb=0.42,fb=0.0;"
-            "  if(vNorm.y>0.5)fb=0.12;if(vNorm.y<-0.5)fb=-0.18;"
-            "  if(abs(vNorm.x)>0.5)fb=-0.06;if(abs(vNorm.z)>0.5)fb=-0.12;"
-            "  float light=clamp(amb+diff*0.58+fb,0.18,1.0);"
-            "  float rim=1.0-max(dot(vNorm,vec3(0,1,0)),0.0);rim=rim*rim*0.08;"
-            "  vec3 lit=tc.rgb*light+rim;"
-            "  float gray=dot(lit,vec3(0.299,0.587,0.114));"
-            "  vec3 sat=mix(vec3(gray),lit,1.15);"
-            "  float dist=length((vWorldPos-camPos).xz);"
-            "  float fog=clamp((dist-22.0)/24.0,0.0,0.88);"
-            "  gl_FragColor=vec4(mix(sat,vec3(0.53,0.81,0.98),fog),1.0);}";
-
-        GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vs, 1, &vS, NULL);
-        glCompileShader(vs);
-        check_shader(vs, "main_vs");
-        GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fs, 1, &fS, NULL);
-        glCompileShader(fs);
-        check_shader(fs, "main_fs");
-        eng->program = glCreateProgram();
-        glBindAttribLocation(eng->program, 0, "pos");
-        glBindAttribLocation(eng->program, 1, "uv");
-        glBindAttribLocation(eng->program, 2, "norm");
-        glAttachShader(eng->program, vs);
-        glAttachShader(eng->program, fs);
-        glLinkProgram(eng->program);
-        check_program(eng->program, "main_prog");
-        glDeleteShader(vs);
-        glDeleteShader(fs);
-
-        init_textures(eng);
-        init_ui_shader();
-        init_inv_shader(eng);
+    // Кнопка Play
+    float playX = sw/2.0f, playY = sh * 0.55f;
+    if (x > playX - 80 && x < playX + 80 &&
+        y > playY - 30 && y < playY + 30) {
         
-        // Генерируем сид заранее (для меню)
+        // Генерируем случайный сид
         srand(time(NULL));
         game_seed = (unsigned int)rand();
         eng->worldSeed = (int)game_seed;
+
+        eng->gameState = STATE_PLAYING;
+        eng->worldLoaded = false;
+        eng->editCount = 0;
+        eng->camPos[0] = 0.5f;
+        eng->camPos[2] = -0.5f;
+        eng->camPos[1] = (float)get_height(0, 0) + 3.0f;
+        eng->velY = 0;
+        return 1;
     }
+    return 0;
 }
 
-void android_main(struct android_app* state) {
-    struct engine eng = {0};
-    eng.movePointerId = -1;
-    eng.lookPointerId = -1;
-    eng.worldLoaded = false;
-    eng.meshDirty = true;
-    eng.selectedSlot = 0;
-    eng.gameState = STATE_MENU;
-    eng.joyTouched = false;
-    eng.vbo = 0;
-    
-    // Начальный инвентарь
-    eng.invSlots[0] = BLOCK_GRASS;
-    eng.invSlots[1] = BLOCK_WOOD;
-    eng.invSlots[2] = BLOCK_LEAVES;
-    eng.invSlots[3] = BLOCK_GRASS;
-    eng.invSlots[4] = BLOCK_GRASS;
-    eng.invSlots[5] = BLOCK_GRASS;
-    eng.invSlots[6] = BLOCK_GRASS;
-    eng.invSlots[7] = BLOCK_GRASS;
-    eng.invSlots[8] = BLOCK_GRASS;
+static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) {
+    struct engine* eng = (struct engine*)app->userData;
+    if (AInputEvent_getType(event) != AINPUT_EVENT_TYPE_MOTION) return 0;
 
-    eng.camPos[0] = 0.5f;
-    eng.camPos[2] = -0.5f;
-    eng.camPos[1] = 10.0f;
-    state->userData = &eng;
-    state->onAppCmd = engine_handle_cmd;
-    state->onInputEvent = engine_handle_input;
-    eng.app = state;
+    int action = AMotionEvent_getAction(event);
+    int code = action & AMOTION_EVENT_ACTION_MASK;
+    int pCount = AMotionEvent_getPointerCount(event);
 
-    while (1) {
-        int ev;
-        struct android_poll_source* s;
-        while (ALooper_pollOnce(0, NULL, &ev, (void**)&s) >= 0) {
-            if (s) s->process(state, s);
-            if (state->destroyRequested) return;
+    if (code == AMOTION_EVENT_ACTION_DOWN ||
+        code == AMOTION_EVENT_ACTION_POINTER_DOWN) {
+        int pi = (code == AMOTION_EVENT_ACTION_DOWN) ? 0 :
+            (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+            >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+        float x = AMotionEvent_getX(event, pi);
+        float y = AMotionEvent_getY(event, pi);
+        int id = AMotionEvent_getPointerId(event, pi);
+
+        if (eng->gameState == STATE_MENU)
+            return handle_menu_input(eng, x, y);
+
+        // Инвентарь
+        float invW = INV_SLOTS * (INV_SLOT_SIZE + INV_PADDING) - INV_PADDING;
+        float invStartX = (eng->width - invW) / 2.0f;
+        float invY = eng->height - INV_Y_OFFSET;
+        if (y > invY - INV_SLOT_SIZE / 2 && y < invY + INV_SLOT_SIZE / 2 &&
+            x > invStartX && x < invStartX + invW) {
+            int slot = (int)((x - invStartX) / (INV_SLOT_SIZE + INV_PADDING));
+            if (slot >= 0 && slot < INV_SLOTS) {
+                eng->selectedSlot = slot;
+                return 1;
+            }
         }
-        engine_draw_frame(&eng);
+
+        // Прыжок
+        float jbX = eng->width - JUMP_BTN_OFFSET;
+        float jbY = eng->height - JUMP_BTN_OFFSET;
+        float djx = x - jbX, djy = y - jbY;
+        if (sqrtf(djx*djx + djy*djy) < JUMP_BTN_SIZE * 1.2f) {
+            if (eng->onGround) { eng->velY = JUMP_FORCE; eng->onGround = false; }
+            return 1;
+        }
+
+        // Ломание
+        float bbX = eng->width - BREAK_BTN_X, bbY = BREAK_BTN_Y;
+        float dbx = x - bbX, dby = y - bbY;
+        if (sqrtf(dbx*dbx + dby*dby) < ACTION_BTN_SIZE * 1.3f) {
+            break_block(eng); return 1;
+        }
+
+        // Ставление
+        float pbX = eng->width - PLACE_BTN_X, pbY = PLACE_BTN_Y;
+        float dpx = x - pbX, dpy = y - pbY;
+        if (sqrtf(dpx*dpx + dpy*dpy) < ACTION_BTN_SIZE * 1.3f) {
+            place_block(eng); return 1;
+        }
+
+        // Джойстик
+        float jx = JOY_X_OFFSET, jy = eng->height - JOY_Y_OFFSET;
+        float djx2 = x - jx, djy2 = y - jy;
+        float dist = sqrtf(djx2*djx2 + djy2*djy2);
+        if (dist < JOY_RADIUS * 2.0f) {
+            eng->joyTouched = true;
+            eng->isMoving = true;
+            eng->movePointerId = id;
+            if (dist > 10.0f) {
+                float c = dist > JOY_RADIUS ? JOY_RADIUS : dist;
+                eng->moveDirX = (djx2/dist) * (c/JOY_RADIUS);
+                eng->moveDirZ = (djy2/dist) * (c/JOY_RADIUS);
+            } else {
+                eng->moveDirX = 0;
+                eng->moveDirZ = 0;
+            }
+            return 1;
+        }
+
+        // Взгляд
+        eng->lastTouchX = x;
+        eng->lastTouchY = y;
+        eng->lookPointerId = id;
+        return 1;
     }
+
+    if (code == AMOTION_EVENT_ACTION_MOVE) {
+        if (eng->gameState == STATE_MENU) return 0;
+        for (int i = 0; i < pCount; i++) {
+            float x = AMotionEvent_getX(event, i);
+            float y = AMotionEvent_getY(event, i);
+            int id = AMotionEvent_getPointerId(event, i);
+
+            if (id == eng->movePointerId && eng->isMoving && eng->joyTouched) {
+                float dx = x - JOY_X_OFFSET;
+                float dy = y - (eng->height - JOY_Y_OFFSET);
+                float d = sqrtf(dx*dx + dy*dy);
+                if (d > 10.0f) {
+                    float c = d > JOY_RADIUS ? JOY_RADIUS : d;
+                    eng->moveDirX = (dx/d)*(c/JOY_RADIUS);
+                    eng->moveDirZ = (dy/d)*(c/JOY_RADIUS);
+                } else {
+                    eng->moveDirX = 0;
+                    eng->moveDirZ = 0;
+                }
+            }
+
+            if (id == eng->lookPointerId) {
+                eng->camRot[1] += (x - eng->lastTouchX) * 0.004f;
+                eng->camRot[0] += (y - eng->lastTouchY) * 0.004f;
+                if (eng->camRot[0] > 1.4f) eng->camRot[0] = 1.4f;
+                if (eng->camRot[0] < -1.4f) eng->camRot[0] = -1.4f;
+                eng->lastTouchX = x;
+                eng->lastTouchY = y;
+            }
+        }
+        return 1;
+    }
+
+    if (code == AMOTION_EVENT_ACTION_UP || code == AMOTION_EVENT_ACTION_POINTER_UP) {
+        int pi = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+                 >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+        int id = AMotionEvent_getPointerId(event, pi);
+        if (id == eng->movePointerId) {
+            eng->isMoving = false;
+            eng->moveDirX = 0;
+            eng->moveDirZ = 0;
+            eng->movePointerId = -1;
+            eng->joyTouched = false;
+        }
+        if (id == eng->lookPointerId) {
+            eng->lookPointerId = -1;
+        }
+        return 1;
+    }
+    return 0;
 }
+
+#endif
