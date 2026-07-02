@@ -19,8 +19,11 @@
 #define PLACE_BTN_Y     190.0f
 #define PI              3.14159265f
 #define PLAYER_W        0.4f
+#define PLAYER_HEIGHT   1.8f
 #define EYE_H           1.65f
 #define HEAD_MARGIN     0.15f
+#define FOOT_MARGIN     0.05f
+#define PLAYER_SPEED    0.076f
 #define GAME_FOV        1.4915f
 #define GRAVITY         0.005f
 #define JUMP_FORCE      0.12f
@@ -28,17 +31,18 @@
 #define LOAD_RADIUS     32
 #define WORLD_BUF       (LOAD_RADIUS * 2 + 1)
 #define CHUNK_H         32
-#define FACE_XP 0x01
-#define FACE_XN 0x02
-#define FACE_YP 0x04
-#define FACE_YN 0x08
-#define FACE_ZP 0x10
-#define FACE_ZN 0x20
+#define FACE_XP         0x01
+#define FACE_XN         0x02
+#define FACE_YP         0x04
+#define FACE_YN         0x08
+#define FACE_ZP         0x10
+#define FACE_ZN         0x20
 #define RAY_DIST        6.0f
 #define RAY_STEP        0.02f
 #define MAX_EDITS       512
 #define BLOCK_AIR       0
 #define BLOCK_GRASS     1
+#define CUSTOM_BLOCK_START 100
 #define INV_SLOTS       9
 #define INV_SLOT_SIZE   46.0f
 #define INV_PADDING     4.0f
@@ -48,9 +52,50 @@
 #define STATE_MENU      0
 #define STATE_PLAYING   1
 
+#define MAX_MODS            16
+#define MAX_CUSTOM_BLOCKS   64
+#define MAX_MOD_NAME        64
+#define MAX_MOD_PATH        128
+#define MAX_BLOCK_NAME      32
+#define MAX_TEXTURE_PATH    128
+
 struct block_edit {
     int wx, wy, wz;
     unsigned char val;
+};
+
+struct custom_block {
+    int id;
+    char name[MAX_BLOCK_NAME];
+    GLuint texTop;
+    GLuint texSide;
+    GLuint texBottom;
+    float hardness;
+    bool transparent;
+    bool solid;
+    bool gravity;
+    int dropId;
+    int dropCount;
+};
+
+struct mod_info {
+    char name[MAX_MOD_NAME];
+    char author[MAX_MOD_NAME];
+    char version[16];
+    char path[MAX_MOD_PATH];
+    bool enabled;
+    bool loaded;
+    int blockIds[MAX_CUSTOM_BLOCKS];
+    int blockCount;
+};
+
+struct mod_loader {
+    struct mod_info mods[MAX_MODS];
+    int modCount;
+    struct custom_block blocks[MAX_CUSTOM_BLOCKS];
+    int blockCount;
+    int nextBlockId;
+    bool initialized;
 };
 
 struct engine {
@@ -60,9 +105,9 @@ struct engine {
     EGLContext context;
     int32_t width, height;
     
-    GLuint program;    // Мир
-    GLuint invProgram; // Инвентарь (3D)
-    GLuint uiProgram;  // Интерфейс (2D)
+    GLuint program;
+    GLuint invProgram;
+    GLuint uiProgram;
     
     GLuint texGrassTop, texGrassSide, texGrassDown;
 
@@ -70,8 +115,10 @@ struct engine {
     float camRot[2];
     float velY;
     float moveDirX, moveDirZ;
+    float joyStartX, joyStartY;
     float lastTouchX, lastTouchY;
     bool isMoving, joyTouched, onGround;
+    bool jumpPressed, breakPressed, placePressed;
     int movePointerId, lookPointerId;
 
     GLuint vbo;
@@ -97,6 +144,8 @@ struct engine {
     int worldSeed;
     int seedDigits[6];
     int seedCursor;
+
+    struct mod_loader modLoader;
 };
 
 #endif
