@@ -19,6 +19,7 @@
 extern "C" {
 #endif
 
+/* Прототипы функций для main.c */
 void init_textures(struct engine* eng);
 void init_ui_shader(void);
 void draw_menu(struct engine* eng);
@@ -83,7 +84,7 @@ void init_textures(struct engine* eng) {
     if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
 }
 
-/* ============= ПОСТРОЕНИЕ VBO ============= */
+/* ============= WORLD RENDER ============= */
 static void push_quad_n(float* buf, int* idx,
     float x0,float y0,float z0,float u0,float v0,
     float x1,float y1,float z1,float u1,float v1,
@@ -91,12 +92,9 @@ static void push_quad_n(float* buf, int* idx,
     float x3,float y3,float z3,float u3,float v3,
     float nx,float ny,float nz) {
     float vd[6][8] = {
-        {x0,y0,z0,u0,v0,nx,ny,nz},
-        {x1,y1,z1,u1,v1,nx,ny,nz},
-        {x2,y2,z2,u2,v2,nx,ny,nz},
-        {x0,y0,z0,u0,v0,nx,ny,nz},
-        {x2,y2,z2,u2,v2,nx,ny,nz},
-        {x3,y3,z3,u3,v3,nx,ny,nz}};
+        {x0,y0,z0,u0,v0,nx,ny,nz},{x1,y1,z1,u1,v1,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz},{x0,y0,z0,u0,v0,nx,ny,nz},
+        {x2,y2,z2,u2,v2,nx,ny,nz},{x3,y3,z3,u3,v3,nx,ny,nz}};
     memcpy(&buf[*idx], vd, sizeof(vd));
     *idx += 48;
 }
@@ -132,12 +130,12 @@ static void rebuild_vbo(struct engine* eng) {
                 unsigned char f = eng->faces[x][y][z]; if(!f) continue;
                 float bx=(float)(ox+x),by=(float)y,bz=(float)(-(oz+z));
                 float x0=bx-.5f,x1=bx+.5f,y0=by-.5f,y1=by+.5f,z0=bz-.5f,z1=bz+.5f;
-                if(f&FACE_XP)push_quad_n(buf,&idx,x1,y0,z0,1,1,x1,y0,z1,0,1,x1,y1,z1,0,0,x1,y1,z0,1,0,1,0,0);
-                if(f&FACE_XN)push_quad_n(buf,&idx,x0,y0,z1,1,1,x0,y0,z0,0,1,x0,y1,z0,0,0,x0,y1,z1,1,0,-1,0,0);
-                if(f&FACE_YP)push_quad_n(buf,&idx,x0,y1,z1,1,1,x1,y1,z1,0,1,x1,y1,z0,0,0,x0,y1,z0,1,0,0,1,0);
-                if(f&FACE_YN)push_quad_n(buf,&idx,x0,y0,z0,1,1,x1,y0,z0,0,1,x1,y0,z1,0,0,x0,y0,z1,1,0,0,-1,0);
-                if(f&FACE_ZP)push_quad_n(buf,&idx,x1,y0,z0,1,1,x0,y0,z0,0,1,x0,y1,z0,0,0,x1,y1,z0,1,0,0,0,-1);
-                if(f&FACE_ZN)push_quad_n(buf,&idx,x0,y0,z1,1,1,x1,y0,z1,0,1,x1,y1,z1,0,0,x0,y1,z1,1,0,0,0,1);
+                if(f&FACE_XP)push_quad_n(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0,1,0,0);
+                if(f&FACE_XN)push_quad_n(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0);
+                if(f&FACE_YP)push_quad_n(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1,0,1,0);
+                if(f&FACE_YN)push_quad_n(buf,&idx,x0,y0,z0,0,0,x1,y0,z0,1,0,x1,y0,z1,1,1,x0,y0,z1,0,1,0,-1,0);
+                if(f&FACE_ZP)push_quad_n(buf,&idx,x1,y0,z0,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x1,y1,z0,0,0,0,0,-1);
+                if(f&FACE_ZN)push_quad_n(buf,&idx,x0,y0,z1,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x0,y1,z1,0,0,0,0,1);
             }
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo);
@@ -147,36 +145,31 @@ static void rebuild_vbo(struct engine* eng) {
     eng->meshDirty = false;
 }
 
-/* ============= АНИМАЦИЯ БЛОКА (исправлена) ============= */
 static void render_anim_block(struct engine* eng) {
     if (!eng->animActive) return;
 
-    float scale = 1.0f;
-    float alpha = 1.0f;
+    float scale, alpha = 1.0f;
     float shakeX = 0, shakeY = 0;
 
     if (eng->animIsBreak) {
-        float t = (float)(ANIM_BREAK_FRAMES - eng->animBreakTimer) / ANIM_BREAK_FRAMES;
-        scale = 1.0f - t * 0.3f;
-        if (scale < 0.1f) scale = 0.1f;
-        alpha = 1.0f - t;
-        shakeX = sinf(t * 50.0f) * 0.08f * (1.0f - t);
-        shakeY = cosf(t * 45.0f) * 0.05f * (1.0f - t);
+        float t = (float)eng->animBreakTimer / ANIM_BREAK_FRAMES;
+        if (t > 0.3f) {
+            scale = 1.0f;
+            shakeX = sinf(t * 40.0f) * 0.06f * t;
+            shakeY = cosf(t * 35.0f) * 0.04f * t;
+        } else {
+            scale = t / 0.3f;
+            alpha = t / 0.3f;
+        }
         eng->animBreakTimer--;
         if (eng->animBreakTimer <= 0) eng->animActive = false;
     } else {
-        float t = (float)(ANIM_PLACE_FRAMES - eng->animPlaceTimer) / ANIM_PLACE_FRAMES;
-        scale = 0.3f + t * 0.7f;
-        alpha = 0.5f + t * 0.5f;
-        float bounce = 1.0f + sinf(t * PI) * 0.15f * (1.0f - t);
-        scale *= bounce;
+        float t = (float)eng->animPlaceTimer / ANIM_PLACE_FRAMES;
+        float progress = 1.0f - t;
+        scale = progress * (1.0f + sinf(progress * PI) * 0.2f);
         if (scale > 1.0f) scale = 1.0f;
         eng->animPlaceTimer--;
-        if (eng->animPlaceTimer <= 0) {
-            eng->animActive = false;
-            scale = 1.0f;
-            alpha = 1.0f;
-        }
+        if (eng->animPlaceTimer <= 0) eng->animActive = false;
     }
 
     if (scale <= 0.01f) return;
@@ -186,14 +179,13 @@ static void render_anim_block(struct engine* eng) {
     float bz = eng->animBlockZ;
     float hs = scale * 0.5f;
 
-    float abuf[6 * 48]; 
-    int aidx = 0;
-    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,1,1,bx+hs,by-hs,bz+hs,0,1,bx+hs,by+hs,bz+hs,0,0,bx+hs,by+hs,bz-hs,1,0,1,0,0);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,1,1,bx-hs,by-hs,bz-hs,0,1,bx-hs,by+hs,bz-hs,0,0,bx-hs,by+hs,bz+hs,1,0,-1,0,0);
-    push_quad_n(abuf,&aidx,bx-hs,by+hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,0,1,bx+hs,by+hs,bz-hs,0,0,bx-hs,by+hs,bz-hs,1,0,0,1,0);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz-hs,1,1,bx+hs,by-hs,bz-hs,0,1,bx+hs,by-hs,bz+hs,0,0,bx-hs,by-hs,bz+hs,1,0,0,-1,0);
-    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,1,1,bx-hs,by-hs,bz-hs,0,1,bx-hs,by+hs,bz-hs,0,0,bx+hs,by+hs,bz-hs,1,0,0,0,-1);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,1,1,bx+hs,by-hs,bz+hs,0,1,bx+hs,by+hs,bz+hs,0,0,bx-hs,by+hs,bz+hs,1,0,0,0,1);
+    float abuf[6 * 48]; int aidx = 0;
+    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,0,0,1,0,0);
+    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx-hs,by+hs,bz+hs,0,0,-1,0,0);
+    push_quad_n(abuf,&aidx,bx-hs,by+hs,bz+hs,0,0,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,0,1,0,1,0);
+    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz-hs,0,0,bx+hs,by-hs,bz-hs,1,0,bx+hs,by-hs,bz+hs,1,1,bx-hs,by-hs,bz+hs,0,1,0,-1,0);
+    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx+hs,by+hs,bz-hs,0,0,0,0,-1);
+    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx-hs,by+hs,bz+hs,0,0,0,0,1);
 
     if (alpha < 1.0f) {
         glEnable(GL_BLEND);
@@ -212,13 +204,39 @@ static void render_anim_block(struct engine* eng) {
     if (alpha < 1.0f) glDisable(GL_BLEND);
 }
 
-/* ============= ОТРИСОВКА МИРА ============= */
+/* 2D текстура блока для инвентаря - исправлено */
+static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
+    float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
+    float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
+    float s = size / eng->height * 2.0f;
+    
+    /* Правильные UV координаты - текстура не растягивается */
+    float verts[] = {
+        ndcX - s, ndcY - s, 0.0f, 1.0f,
+        ndcX + s, ndcY - s, 1.0f, 1.0f,
+        ndcX + s, ndcY + s, 1.0f, 0.0f,
+        ndcX - s, ndcY - s, 0.0f, 1.0f,
+        ndcX + s, ndcY + s, 1.0f, 0.0f,
+        ndcX - s, ndcY + s, 0.0f, 0.0f
+    };
+    
+    glUseProgram(uiProg);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);
+    
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, verts + 2);
+    glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
 void render_world(struct engine* eng) {
     if (eng->meshDirty) rebuild_vbo(eng);
-    if (eng->visibleFaceCount == 0) {
-        render_anim_block(eng);
-        return;
-    }
+    if (eng->visibleFaceCount == 0) return;
     glEnable(GL_DEPTH_TEST);
     glUseProgram(eng->program);
     glUniform3f(glGetUniformLocation(eng->program, "camPos"),
@@ -231,6 +249,7 @@ void render_world(struct engine* eng) {
     glUniform1i(glGetUniformLocation(eng->program, "texDown"), 2);
 
     float proj[16], view[16], mvp[16];
+    /* Увеличиваем дальность прорисовки с 120 до 200 */
     mat4_perspective(proj, GAME_FOV, (float)eng->width/(float)eng->height, 0.1f, 200.0f);
     mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
     mat4_mul(mvp, proj, view);
@@ -246,7 +265,7 @@ void render_world(struct engine* eng) {
     render_anim_block(eng);
 }
 
-/* ============= UI ШЕЙДЕР ============= */
+/* ============= UI ============= */
 void init_ui_shader(void) {
     const char* vS = 
         "attribute vec2 aPos;"
@@ -284,7 +303,6 @@ void init_ui_shader(void) {
     glDeleteShader(fs);
 }
 
-/* ============= ВСПОМОГАТЕЛЬНЫЕ UI-ФУНКЦИИ ============= */
 static void draw_rect_no_tex(float cx, float cy, float hw, float hh, int sw, int sh,
                               float cr, float cg, float cb, float ca) {
     float nx = (cx/sw)*2.0f-1.0f, ny = 1.0f-(cy/sh)*2.0f;
@@ -299,31 +317,9 @@ static void draw_rect_no_tex(float cx, float cy, float hw, float hh, int sw, int
     glDrawArrays(GL_TRIANGLES,0,6);
 }
 
-static void draw_border(float cx, float cy, float hw, float hh, float t, int sw, int sh,
-                        float cr, float cg, float cb, float ca) {
-    draw_rect_no_tex(cx, cy-hh+t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
-    draw_rect_no_tex(cx, cy+hh-t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
-    draw_rect_no_tex(cx-hw+t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
-    draw_rect_no_tex(cx+hw-t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
-}
-
-static void draw_digit(float cx, float cy, float sz, int d, int sw, int sh,
-                       float cr, float cg, float cb) {
-    float w = sz * 0.4f, h = sz * 0.5f, t = sz * 0.12f;
-    bool segs[10][7] = {
-        {1,0,1,1,1,1,1}, {0,0,0,0,1,0,1}, {1,1,1,0,1,1,0},
-        {1,1,1,0,1,0,1}, {0,1,0,1,1,0,1}, {1,1,1,1,0,0,1},
-        {1,1,1,1,0,1,1}, {1,0,0,0,1,0,1}, {1,1,1,1,1,1,1},
-        {1,1,1,1,1,0,1}
-    };
-    if (d < 0 || d > 9) return;
-    if (segs[d][0]) draw_rect_no_tex(cx, cy-h, w, t, sw, sh, cr,cg,cb,1);
-    if (segs[d][1]) draw_rect_no_tex(cx, cy, w, t, sw, sh, cr,cg,cb,1);
-    if (segs[d][2]) draw_rect_no_tex(cx, cy+h, w, t, sw, sh, cr,cg,cb,1);
-    if (segs[d][3]) draw_rect_no_tex(cx-w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
-    if (segs[d][4]) draw_rect_no_tex(cx+w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
-    if (segs[d][5]) draw_rect_no_tex(cx-w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
-    if (segs[d][6]) draw_rect_no_tex(cx+w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+static void draw_rect(float cx, float cy, float hw, float hh, int sw, int sh,
+                      float cr, float cg, float cb, float ca) {
+    draw_rect_no_tex(cx, cy, hw, hh, sw, sh, cr, cg, cb, ca);
 }
 
 static void draw_ring(float cx, float cy, float r, float thick, int w, int h,
@@ -369,64 +365,84 @@ static void draw_circle(float cx, float cy, float r, int w, int h,
     glDrawArrays(GL_TRIANGLE_FAN,0,segs+2);
 }
 
-/* ============= МЕНЮ (только кнопка Play) ============= */
+static void draw_border(float cx, float cy, float hw, float hh, float t, int sw, int sh,
+                        float cr, float cg, float cb, float ca) {
+    draw_rect_no_tex(cx, cy-hh+t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx, cy+hh-t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx-hw+t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx+hw-t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
+}
+
+static void draw_digit(float cx, float cy, float sz, int d, int sw, int sh,
+                       float cr, float cg, float cb) {
+    float w = sz * 0.4f, h = sz * 0.5f, t = sz * 0.12f;
+    bool segs[10][7] = {
+        {1,0,1,1,1,1,1}, {0,0,0,0,1,0,1}, {1,1,1,0,1,1,0},
+        {1,1,1,0,1,0,1}, {0,1,0,1,1,0,1}, {1,1,1,1,0,0,1},
+        {1,1,1,1,0,1,1}, {1,0,0,0,1,0,1}, {1,1,1,1,1,1,1},
+        {1,1,1,1,1,0,1}
+    };
+    if (d < 0 || d > 9) return;
+    if (segs[d][0]) draw_rect_no_tex(cx, cy-h, w, t, sw, sh, cr,cg,cb,1);
+    if (segs[d][1]) draw_rect_no_tex(cx, cy, w, t, sw, sh, cr,cg,cb,1);
+    if (segs[d][2]) draw_rect_no_tex(cx, cy+h, w, t, sw, sh, cr,cg,cb,1);
+    if (segs[d][3]) draw_rect_no_tex(cx-w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+    if (segs[d][4]) draw_rect_no_tex(cx+w, cy-h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+    if (segs[d][5]) draw_rect_no_tex(cx-w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+    if (segs[d][6]) draw_rect_no_tex(cx+w, cy+h*0.5f, t, h*0.5f+t, sw, sh, cr,cg,cb,1);
+}
+
+/* ============= DRAW MENU ============= */
 void draw_menu(struct engine* eng) {
     int sw = eng->width, sh = eng->height;
-    
-    // Фон
-    draw_rect_no_tex(sw/2.0f, sh/2.0f, sw/2.0f, sh/2.0f, sw, sh, 0.2f, 0.6f, 0.3f, 1.0f);
-    
-    // Название
-    float titleY = sh * 0.3f;
-    draw_rect_no_tex(sw/2.0f, titleY, 150, 40, sw, sh, 0, 0, 0, 0.4f);
-    
-    // Кнопка PLAY
-    float playX = sw/2.0f, playY = sh * 0.55f;
-    draw_rect_no_tex(playX, playY, 80, 30, sw, sh, 0.15f, 0.5f, 0.15f, 0.9f);
-    draw_border(playX, playY, 80, 30, 3, sw, sh, 0.3f, 1.0f, 0.3f, 1.0f);
-    
-    // Треугольник Play
-    float pnx = (playX/sw)*2-1, pny = 1-(playY/sh)*2;
-    float pax = (20.0f/sw)*2, pay = (20.0f/sh)*2;
-    float play[] = {pnx-pax, pny+pay, pnx-pax, pny-pay, pnx+pax, pny};
+    draw_rect_no_tex(sw/2.0f, sh/2.0f, sw/2.0f, sh/2.0f, sw, sh, 0.2f,0.6f,0.3f, 1);
+    float titleY = sh * 0.25f;
+    draw_rect_no_tex(sw/2.0f, titleY, 120, 25, sw, sh, 0,0,0, 0.3f);
+    draw_digit(sw/2.0f - 60, titleY, 18, 5, sw, sh, 1,1,1);
+    draw_digit(sw/2.0f - 20, titleY, 18, 3, sw, sh, 1,1,1);
+    draw_digit(sw/2.0f + 20, titleY, 18, 3, sw, sh, 1,1,1);
+    draw_digit(sw/2.0f + 60, titleY, 18, 0, sw, sh, 1,1,1);
+
+    float seedY = sh * 0.38f;
+    draw_rect_no_tex(sw/2.0f, seedY, 100, 22, sw, sh, 0,0,0, 0.4f);
+    for (int i = 0; i < eng->seedCursor; i++) {
+        float dx = (i - eng->seedCursor * 0.5f + 0.5f) * 28;
+        draw_digit(sw/2.0f + dx, seedY, 14, eng->seedDigits[i], sw, sh, 1,1,1);
+    }
+    if (eng->seedCursor < 6) {
+        float cx = sw/2.0f + (eng->seedCursor - eng->seedCursor*0.5f + 0.5f) * 28;
+        draw_rect_no_tex(cx, seedY, 1.5f, 12, sw, sh, 1,1,1, 0.7f);
+    }
+
+    float numY = sh * 0.52f;
+    float numStartX = (sw - 10 * 40) / 2.0f;
+    for (int i = 0; i <= 9; i++) {
+        float bx = numStartX + i * 40 + 20;
+        draw_rect_no_tex(bx, numY, 16, 16, sw, sh, 0.15f,0.15f,0.15f, 0.8f);
+        draw_border(bx, numY, 16, 16, 1.5f, sw, sh, 0.5f,0.5f,0.5f, 1);
+        draw_digit(bx, numY, 10, i, sw, sh, 1,1,1);
+    }
+
+    float clrX = sw/2.0f - 110, btnY = sh * 0.65f;
+    draw_rect_no_tex(clrX, btnY, 45, 22, sw, sh, 0.6f,0.15f,0.15f, 0.9f);
+    draw_border(clrX, btnY, 45, 22, 2, sw, sh, 1,0.3f,0.3f, 1);
+    draw_digit(clrX, btnY, 12, 0, sw, sh, 1,1,1);
+
+    float playX = sw/2.0f + 110;
+    draw_rect_no_tex(playX, btnY, 70, 22, sw, sh, 0.15f,0.5f,0.15f, 0.9f);
+    draw_border(playX, btnY, 70, 22, 2, sw, sh, 0.3f,1,0.3f, 1);
+    float pnx = (playX/sw)*2-1, pny = 1-(btnY/sh)*2;
+    float pax = (15.0f/sw)*2, pay = (15.0f/sh)*2;
+    float play[] = {pnx-pax,pny+pay, pnx-pax,pny-pay, pnx+pax,pny};
     glUseProgram(uiProg);
-    glUniform4f(glGetUniformLocation(uiProg,"col"), 1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform4f(glGetUniformLocation(uiProg,"col"),1,1,1,1);
     glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, play);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,play);
     glEnableVertexAttribArray(0);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_TRIANGLES,0,3);
 }
 
-/* ============= UI ИГРЫ (инвентарь с правильными UV) ============= */
-static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
-    float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
-    float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
-    float s = size / eng->height * 2.0f;
-    
-    // Правильные UV координаты для квадрата
-    float verts[] = {
-        ndcX - s, ndcY - s, 0.0f, 0.0f,
-        ndcX + s, ndcY - s, 1.0f, 0.0f,
-        ndcX + s, ndcY + s, 1.0f, 1.0f,
-        ndcX - s, ndcY - s, 0.0f, 0.0f,
-        ndcX + s, ndcY + s, 1.0f, 1.0f,
-        ndcX - s, ndcY + s, 0.0f, 1.0f
-    };
-    
-    glUseProgram(uiProg);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
-    glUniform4f(glGetUniformLocation(uiProg, "col"), 1.0f, 1.0f, 1.0f, 1.0f);
-    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);
-    
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, verts + 2);
-    glEnableVertexAttribArray(1);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-}
-
+/* ============= DRAW UI ============= */
 void draw_ui(struct engine* eng) {
     int sw = eng->width, sh = eng->height;
     glDisable(GL_DEPTH_TEST);
@@ -498,11 +514,19 @@ void draw_ui(struct engine* eng) {
     for (int i = 0; i < INV_SLOTS; i++) {
         float slotX = invStartX + i*(INV_SLOT_SIZE+INV_PADDING) + hs;
         bool sel = (i == eng->selectedSlot);
-        if (sel) draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.85f,0.85f,0.85f, 0.9f);
-        else draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.12f,0.12f,0.12f, 0.75f);
+        
+        // Фон слота
+        if (sel)
+            draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.85f,0.85f,0.85f, 0.9f);
+        else
+            draw_rect_no_tex(slotX, invY, hs, hs, sw, sh, 0.12f,0.12f,0.12f, 0.75f);
+        
+        // Обводка
         draw_border(slotX, invY, hs, hs, 2.0f, sw, sh,
                     sel?1.0f:0.35f, sel?1.0f:0.35f, sel?1.0f:0.35f, 1.0f);
-        if (eng->invSlots[i] != BLOCK_AIR) {
+        
+        // Блок в слоте
+        if (eng->invSlots[i] == BLOCK_GRASS) {
             render_inv_block_2d(eng, slotX, invY, hs*0.6f);
         }
     }

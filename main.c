@@ -8,7 +8,7 @@
 #include "engine.h"
 #include "world.h"
 #include "math_utils.h"
-#include "physics.h"
+#include "physics.h"   // <--- ДОБАВЛЕНО!
 #include "input.h"
 #include "render.h"
 
@@ -44,6 +44,7 @@ static int check_program(GLuint prog, const char* name) {
 
 static void engine_draw_frame(struct engine* eng) {
     if (!eng->display) return;
+
     eglQuerySurface(eng->display, eng->surface, EGL_WIDTH, &eng->width);
     eglQuerySurface(eng->display, eng->surface, EGL_HEIGHT, &eng->height);
     glViewport(0, 0, eng->width, eng->height);
@@ -70,7 +71,42 @@ static void engine_draw_frame(struct engine* eng) {
 }
 
 static void init_inv_shader(struct engine* eng) {
-    // Заглушка
+    const char* vS =
+        "attribute vec3 aPos;attribute vec2 aUV;attribute float aFace;"
+        "varying vec2 vUV;varying float vFace;"
+        "uniform vec2 offset;uniform float scale;uniform float aspect;"
+        "void main(){"
+        "  float ix=(aPos.x-aPos.z)*0.7071;"
+        "  float iy=(aPos.x+aPos.z)*0.4082+aPos.y*0.8165;"
+        "  gl_Position=vec4(ix*scale/aspect+offset.x,iy*scale+offset.y,0.0,1.0);"
+        "  vUV=aUV;vFace=aFace;}";
+    const char* fS =
+        "precision mediump float;"
+        "varying vec2 vUV;varying float vFace;"
+        "uniform sampler2D texTop,texSide;"
+        "void main(){"
+        "  vec4 col;int f=int(vFace+0.5);"
+        "  if(f==0)col=texture2D(texTop,vUV);else col=texture2D(texSide,vUV);"
+        "  float l=1.0;if(f==1)l=0.7;if(f==2)l=0.85;"
+        "  gl_FragColor=vec4(col.rgb*l,1.0);}";
+    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vs, 1, &vS, NULL);
+    glCompileShader(vs);
+    check_shader(vs, "inv_vs");
+    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fs, 1, &fS, NULL);
+    glCompileShader(fs);
+    check_shader(fs, "inv_fs");
+    eng->invProgram = glCreateProgram();
+    glBindAttribLocation(eng->invProgram, 0, "aPos");
+    glBindAttribLocation(eng->invProgram, 1, "aUV");
+    glBindAttribLocation(eng->invProgram, 2, "aFace");
+    glAttachShader(eng->invProgram, vs);
+    glAttachShader(eng->invProgram, fs);
+    glLinkProgram(eng->invProgram);
+    check_program(eng->invProgram, "inv_prog");
+    glDeleteShader(vs);
+    glDeleteShader(fs);
 }
 
 static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
@@ -163,6 +199,7 @@ static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
         init_ui_shader();
         init_inv_shader(eng);
         
+        // Генерируем случайный сид при запуске
         srand(time(NULL));
         game_seed = (unsigned int)rand();
         eng->worldSeed = (int)game_seed;
@@ -177,19 +214,11 @@ void android_main(struct android_app* state) {
     eng.meshDirty = true;
     eng.selectedSlot = 0;
     eng.gameState = STATE_MENU;
+    eng.seedCursor = 0;
     eng.joyTouched = false;
-    eng.vbo = 0;
-    
     eng.invSlots[0] = BLOCK_GRASS;
-    eng.invSlots[1] = BLOCK_WOOD;
-    eng.invSlots[2] = BLOCK_LEAVES;
-    eng.invSlots[3] = BLOCK_GRASS;
-    eng.invSlots[4] = BLOCK_GRASS;
-    eng.invSlots[5] = BLOCK_GRASS;
-    eng.invSlots[6] = BLOCK_GRASS;
-    eng.invSlots[7] = BLOCK_GRASS;
-    eng.invSlots[8] = BLOCK_GRASS;
-
+    eng.invSlots[1] = BLOCK_GRASS;
+    eng.invSlots[2] = BLOCK_GRASS;
     eng.camPos[0] = 0.5f;
     eng.camPos[2] = -0.5f;
     eng.camPos[1] = 10.0f;

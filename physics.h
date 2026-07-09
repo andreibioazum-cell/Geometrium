@@ -63,6 +63,7 @@ static void apply_physics(struct engine* eng) {
     }
 
     if (eng->isMoving && (eng->moveDirX != 0 || eng->moveDirZ != 0)) {
+        // Скорость уменьшена на 5% (было 0.08f)
         float speed = 0.076f;
         float yaw = eng->camRot[1];
         float fX = sinf(yaw), fZ = -cosf(yaw);

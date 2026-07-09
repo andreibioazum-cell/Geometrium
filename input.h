@@ -3,31 +3,23 @@
 
 #include <android_native_app_glue.h>
 #include <math.h>
-#include <stdlib.h>
-#include <time.h>
 #include "engine.h"
 #include "world.h"
 #include "render.h"
 
 static int32_t handle_menu_input(struct engine* eng, float x, float y) {
     int sw = eng->width, sh = eng->height;
-
-    // Кнопка Play
-    float playX = sw/2.0f, playY = sh * 0.55f;
-    if (x > playX - 80 && x < playX + 80 &&
-        y > playY - 30 && y < playY + 30) {
-        
-        // Генерируем случайный сид
-        srand(time(NULL));
-        game_seed = (unsigned int)rand();
-        eng->worldSeed = (int)game_seed;
-
+    
+    // Кнопка Play (центр экрана)
+    float playX = sw/2.0f, playY = sh * 0.65f;
+    if (x > playX - 150 && x < playX + 150 && 
+        y > playY - 40 && y < playY + 40) {
         eng->gameState = STATE_PLAYING;
         eng->worldLoaded = false;
         eng->editCount = 0;
         eng->camPos[0] = 0.5f;
         eng->camPos[2] = -0.5f;
-        eng->camPos[1] = (float)get_height(0, 0) + 3.0f;
+        eng->camPos[1] = (float)get_height(0, 0) + 2.5f;
         eng->velY = 0;
         return 1;
     }
@@ -44,9 +36,11 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
 
     if (code == AMOTION_EVENT_ACTION_DOWN ||
         code == AMOTION_EVENT_ACTION_POINTER_DOWN) {
+
         int pi = (code == AMOTION_EVENT_ACTION_DOWN) ? 0 :
             (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
             >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+
         float x = AMotionEvent_getX(event, pi);
         float y = AMotionEvent_getY(event, pi);
         int id = AMotionEvent_getPointerId(event, pi);
@@ -94,6 +88,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
         float jx = JOY_X_OFFSET, jy = eng->height - JOY_Y_OFFSET;
         float djx2 = x - jx, djy2 = y - jy;
         float dist = sqrtf(djx2*djx2 + djy2*djy2);
+        
         if (dist < JOY_RADIUS * 2.0f) {
             eng->joyTouched = true;
             eng->isMoving = true;
@@ -108,7 +103,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             }
             return 1;
         }
-
+        
         // Взгляд
         eng->lastTouchX = x;
         eng->lastTouchY = y;
@@ -122,7 +117,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
             float x = AMotionEvent_getX(event, i);
             float y = AMotionEvent_getY(event, i);
             int id = AMotionEvent_getPointerId(event, i);
-
+            
             if (id == eng->movePointerId && eng->isMoving && eng->joyTouched) {
                 float dx = x - JOY_X_OFFSET;
                 float dy = y - (eng->height - JOY_Y_OFFSET);
@@ -136,7 +131,7 @@ static int32_t engine_handle_input(struct android_app* app, AInputEvent* event) 
                     eng->moveDirZ = 0;
                 }
             }
-
+            
             if (id == eng->lookPointerId) {
                 eng->camRot[1] += (x - eng->lastTouchX) * 0.004f;
                 eng->camRot[0] += (y - eng->lastTouchY) * 0.004f;
