@@ -56,8 +56,8 @@
 #define INV_PADDING     4.0f
 #define INV_Y_OFFSET    50.0f
 
-#define ANIM_BREAK_FRAMES 12
-#define ANIM_PLACE_FRAMES 10
+#define ANIM_BREAK_FRAMES 15
+#define ANIM_PLACE_FRAMES 12
 
 #define STATE_MENU      0
 #define STATE_PLAYING   1
@@ -108,6 +108,10 @@ struct engine {
     unsigned char invSlots[INV_SLOTS];
     int selectedSlot;
 
+    // Система добычи
+    float miningProgress;
+    int miningX, miningY, miningZ;
+
     int animBreakTimer;
     int animPlaceTimer;
     float animBlockX, animBlockY, animBlockZ;
@@ -116,9 +120,6 @@ struct engine {
 
     int gameState;
     int worldSeed;
-    int seedDigits[6];
-    int seedCursor;
-    
     bool joyTouched;
 };
 
