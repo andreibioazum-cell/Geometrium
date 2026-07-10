@@ -299,6 +299,30 @@ static void draw_rect_no_tex(float cx, float cy, float hw, float hh, int sw, int
     glDrawArrays(GL_TRIANGLES,0,6);
 }
 
+static void draw_textured_rect(float cx, float cy, float hw, float hh, int sw, int sh, GLuint tex) {
+    float nx = (cx/sw)*2.0f-1.0f, ny = 1.0f-(cy/sh)*2.0f;
+    float rw = (hw/sw)*2.0f, rh = (hh/sh)*2.0f;
+    float v[] = {
+        nx-rw, ny-rh, 0.0f, 0.0f,
+        nx+rw, ny-rh, 1.0f, 0.0f,
+        nx+rw, ny+rh, 1.0f, 1.0f,
+        nx-rw, ny-rh, 0.0f, 0.0f,
+        nx+rw, ny+rh, 1.0f, 1.0f,
+        nx-rw, ny+rh, 0.0f, 1.0f
+    };
+    glUseProgram(uiProg);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
+    glUniform4f(glGetUniformLocation(uiProg, "col"), 1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, v);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, v + 2);
+    glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
 static void draw_border(float cx, float cy, float hw, float hh, float t, int sw, int sh,
                         float cr, float cg, float cb, float ca) {
     draw_rect_no_tex(cx, cy-hh+t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
@@ -399,28 +423,12 @@ void draw_menu(struct engine* eng) {
 
 /* ============= UI ИГРЫ (инвентарь с правильными UV) ============= */
 static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size, unsigned char type) {
+    (void)type;
     float half = size * 0.5f;
-    float topW = size * 0.78f;
-    float topH = size * 0.28f;
-    float offX = size * 0.12f;
-    float offY = size * 0.12f;
-
-    float r = 0.8f, g = 0.8f, b = 0.8f;
-    switch (type) {
-        case BLOCK_GRASS: r = 0.28f; g = 0.72f; b = 0.24f; break;
-        case BLOCK_WOOD:  r = 0.44f; g = 0.28f; b = 0.16f; break;
-        case BLOCK_LEAVES:r = 0.22f; g = 0.62f; b = 0.22f; break;
-        default: break;
-    }
-
-    draw_rect_no_tex(screenX + offX, screenY + offY, topW * 0.5f, topH * 0.5f,
-                     eng->width, eng->height, r * 0.72f, g * 0.72f, b * 0.72f, 1.0f);
-    draw_rect_no_tex(screenX, screenY, half, half * 0.8f,
-                     eng->width, eng->height, r, g, b, 1.0f);
-    draw_border(screenX, screenY, half, half * 0.8f, 1.0f, eng->width, eng->height,
+    draw_textured_rect(screenX, screenY, half, half * 0.9f,
+                       eng->width, eng->height, eng->texGrassSide);
+    draw_border(screenX, screenY, half, half * 0.9f, 1.0f, eng->width, eng->height,
                 0.0f, 0.0f, 0.0f, 0.75f);
-    draw_rect_no_tex(screenX - half * 0.16f, screenY + half * 0.2f, half * 0.16f, half * 0.12f,
-                     eng->width, eng->height, 1.0f, 1.0f, 1.0f, 0.35f);
 }
 
 void draw_ui(struct engine* eng) {
@@ -428,13 +436,6 @@ void draw_ui(struct engine* eng) {
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    if (eng->gameState == STATE_MENU) {
-        draw_menu(eng);
-        glDisable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST);
-        return;
-    }
 
     // Прицел
     float cx = (float)(sw / 2), cy = (float)(sh / 2);

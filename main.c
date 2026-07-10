@@ -48,18 +48,6 @@ static void engine_draw_frame(struct engine* eng) {
     eglQuerySurface(eng->display, eng->surface, EGL_HEIGHT, &eng->height);
     glViewport(0, 0, eng->width, eng->height);
 
-    if (eng->gameState == STATE_MENU) {
-        glClearColor(0.2f, 0.6f, 0.3f, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDisable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        draw_menu(eng);
-        glDisable(GL_BLEND);
-        eglSwapBuffers(eng->display, eng->surface);
-        return;
-    }
-
     update_world(eng);
     apply_physics(eng);
     glClearColor(0.53f, 0.81f, 0.98f, 1);
@@ -178,7 +166,7 @@ void android_main(struct android_app* state) {
     eng.worldLoaded = false;
     eng.meshDirty = true;
     eng.selectedSlot = 0;
-    eng.gameState = STATE_MENU;
+    eng.gameState = STATE_PLAYING;
     eng.seedCursor = 0;
     eng.joyTouched = false;
     eng.vbo = 0;

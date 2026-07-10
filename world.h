@@ -139,37 +139,14 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
         }
     }
 
-    // Деревья - гарантированно появляются на траве
-    int treeCount = 0;
-    int attempts = 0;
-    while (treeCount < 8 && attempts < 120) {
-        attempts++;
-        int dx = (rand() % (LOAD_RADIUS * 2)) - LOAD_RADIUS;
-        int dz = (rand() % (LOAD_RADIUS * 2)) - LOAD_RADIUS;
-        int wx = cx + dx, wz = cz + dz;
-        int h = get_height(wx, wz);
-        
-        // Проверяем, что место подходит для дерева
-        if (h >= 4 && h < CHUNK_H - 6) {
-            // Проверяем, что рядом нет других деревьев
-            bool hasTree = false;
-            for (int tx = -3; tx <= 3 && !hasTree; tx++) {
-                for (int tz = -3; tz <= 3 && !hasTree; tz++) {
-                    int bx, bz;
-                    world_to_buf(eng, wx + tx, wz + tz, &bx, &bz);
-                    if (bx >= 0 && bx < WORLD_BUF && bz >= 0 && bz < WORLD_BUF) {
-                        for (int y = h; y < h + 6; y++) {
-                            if (y < CHUNK_H && eng->blocks[bx][y][bz] != BLOCK_AIR) {
-                                hasTree = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            if (!hasTree) {
+    // Деревья — детерминированно и без постоянной перегенерации
+    for (int dx = -LOAD_RADIUS + 4; dx <= LOAD_RADIUS - 4; dx += 7) {
+        for (int dz = -LOAD_RADIUS + 4; dz <= LOAD_RADIUS - 4; dz += 7) {
+            int wx = cx + dx;
+            int wz = cz + dz;
+            int h = get_height(wx, wz);
+            if (h >= 4 && h < CHUNK_H - 6 && noise2d(wx, wz) > 0.56f) {
                 generate_tree(eng, wx, wz);
-                treeCount++;
             }
         }
     }
@@ -228,7 +205,8 @@ static void update_world(struct engine* eng) {
     int pz = (int)floorf(-eng->camPos[2]);
     if (!eng->worldLoaded) { load_blocks_around(eng, px, pz); return; }
     int dx = px - eng->loadCenterX, dz = pz - eng->loadCenterZ;
-    if (dx * dx + dz * dz > (LOAD_RADIUS / 2) * (LOAD_RADIUS / 2)) load_blocks_around(eng, px, pz);
+    int margin = LOAD_RADIUS - 4;
+    if (abs(dx) >= margin || abs(dz) >= margin) load_blocks_around(eng, px, pz);
 }
 
 static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {
