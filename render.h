@@ -52,8 +52,6 @@ static GLuint make_color_tex(unsigned char r, unsigned char g, unsigned char b) 
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
     return tex;
 }
@@ -65,15 +63,10 @@ void init_textures(struct engine* eng) {
     eng->texLeaves = load_texture(eng->app, "foliage.png");
     eng->texTreeSide = load_texture(eng->app, "tree_side.png");
     eng->texTreeTop = load_texture(eng->app, "tree_top_down.png");
-    if (!eng->texGrassTop) eng->texGrassTop = make_color_tex(100, 180, 60);
-    if (!eng->texGrassSide) eng->texGrassSide = make_color_tex(120, 100, 70);
-    if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
-    if (!eng->texLeaves) eng->texLeaves = make_color_tex(40, 120, 40);
-    if (!eng->texTreeSide) eng->texTreeSide = make_color_tex(90, 70, 40);
-    if (!eng->texTreeTop) eng->texTreeTop = make_color_tex(100, 80, 50);
+    if(!eng->texLeaves) eng->texLeaves = make_color_tex(40,120,40);
 }
 
-static void push_quad_n(float* buf, int* idx, float x0,float y0,float z0,float u0,float v0, float x1,float y1,float z1,float u1,float v1, float x2,float y2,float z2,float u2,float v2, float x3,float y3,float z3,float u3,float v3, float nx,float ny,float nz, float type) {
+static void push_quad(float* buf, int* idx, float x0,float y0,float z0,float u0,float v0, float x1,float y1,float z1,float u1,float v1, float x2,float y2,float z2,float u2,float v2, float x3,float y3,float z3,float u3,float v3, float nx,float ny,float nz, float type) {
     float vd[6][9] = { {x0,y0,z0,u0,v0,nx,ny,nz,type},{x1,y1,z1,u1,v1,nx,ny,nz,type}, {x2,y2,z2,u2,v2,nx,ny,nz,type},{x0,y0,z0,u0,v0,nx,ny,nz,type}, {x2,y2,z2,u2,v2,nx,ny,nz,type},{x3,y3,z3,u3,v3,nx,ny,nz,type}};
     memcpy(&buf[*idx], vd, sizeof(vd)); *idx += 54;
 }
@@ -89,7 +82,7 @@ static void rebuild_vbo(struct engine* eng) {
                 if(f&FACE_YN)fc++;if(f&FACE_ZP)fc++;if(f&FACE_ZN)fc++;
             }
     eng->visibleFaceCount = fc;
-    if (fc == 0) { eng->meshDirty = false; return; }
+    if (fc == 0) return;
     float* buf = (float*)malloc((size_t)fc * 54 * sizeof(float));
     if(!buf) return;
     int idx = 0, ox = eng->loadCenterX - LOAD_RADIUS, oz = eng->loadCenterZ - LOAD_RADIUS;
@@ -97,19 +90,17 @@ static void rebuild_vbo(struct engine* eng) {
         for (int y = 0; y < CHUNK_H; y++)
             for (int z = 0; z < WORLD_BUF; z++) {
                 unsigned char f = eng->faces[x][y][z]; if(!f) continue;
-                float type = (float)eng->blocks[x][y][z];
-                float bx=(float)(ox+x),by=(float)y,bz=(float)(-(oz+z));
+                float type = (float)eng->blocks[x][y][z], bx=(float)(ox+x), by=(float)y, bz=(float)(-(oz+z));
                 float x0=bx-.5f,x1=bx+.5f,y0=by-.5f,y1=by+.5f,z0=bz-.5f,z1=bz+.5f;
-                if(f&FACE_XP)push_quad_n(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0,1,0,0,type);
-                if(f&FACE_XN)push_quad_n(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0,type);
-                if(f&FACE_YP)push_quad_n(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1,0,1,0,type);
-                if(f&FACE_YN)push_quad_n(buf,&idx,x0,y0,z0,0,0,x1,y0,z0,1,0,x1,y0,z1,1,1,x0,y0,z1,0,1,0,-1,0,type);
-                if(f&FACE_ZP)push_quad_n(buf,&idx,x1,y0,z0,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x1,y1,z0,0,0,0,0,-1,type);
-                if(f&FACE_ZN)push_quad_n(buf,&idx,x0,y0,z1,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x0,y1,z1,0,0,0,0,1,type);
+                if(f&FACE_XP)push_quad(buf,&idx,x1,y0,z0,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x1,y1,z0,0,0,1,0,0,type);
+                if(f&FACE_XN)push_quad(buf,&idx,x0,y0,z1,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x0,y1,z1,0,0,-1,0,0,type);
+                if(f&FACE_YP)push_quad(buf,&idx,x0,y1,z1,0,0,x1,y1,z1,1,0,x1,y1,z0,1,1,x0,y1,z0,0,1,0,1,0,type);
+                if(f&FACE_YN)push_quad(buf,&idx,x0,y0,z0,0,0,x1,y0,z0,1,0,x1,y0,z1,1,1,x0,y0,z1,0,1,0,-1,0,type);
+                if(f&FACE_ZP)push_quad(buf,&idx,x1,y0,z0,0,1,x0,y0,z0,1,1,x0,y1,z0,1,0,x1,y1,z0,0,0,0,0,-1,type);
+                if(f&FACE_ZN)push_quad(buf,&idx,x0,y0,z1,0,1,x1,y0,z1,1,1,x1,y1,z1,1,0,x0,y1,z1,0,0,0,0,1,type);
             }
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, eng->vbo); 
-    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(fc * 54 * sizeof(float)), buf, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, eng->vbo); glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(fc * 54 * sizeof(float)), buf, GL_STATIC_DRAW);
     free(buf); eng->meshDirty = false;
 }
 
@@ -117,28 +108,25 @@ static void render_anim_block(struct engine* eng) {
     if (!eng->animActive) return;
     float scale = 1.0f;
     if (eng->animIsBreak) {
-        float t = (float)eng->animBreakTimer / ANIM_BREAK_FRAMES;
-        scale = t * t; eng->animBreakTimer--;
+        float t = (float)eng->animBreakTimer / ANIM_BREAK_FRAMES; scale = t * t; eng->animBreakTimer--;
     } else {
-        float t = (float)eng->animPlaceTimer / ANIM_PLACE_FRAMES;
-        float p = 1.0f - t; scale = p * p; eng->animPlaceTimer--;
+        float t = (float)eng->animPlaceTimer / ANIM_PLACE_FRAMES; scale = 1.0f - (t * t); eng->animPlaceTimer--;
     }
     if (eng->animBreakTimer <= 0 && eng->animPlaceTimer <= 0) eng->animActive = false;
     float bx = eng->animBlockX, by = eng->animBlockY, bz = eng->animBlockZ, hs = scale * 0.5f;
-    float abuf[324]; int aidx = 0; float type = 1.0f;
-    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,0,0,1,0,0,type);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx-hs,by+hs,bz+hs,0,0,-1,0,0,type);
-    push_quad_n(abuf,&aidx,bx-hs,by+hs,bz+hs,0,0,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,0,1,0,1,0,type);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz-hs,0,0,bx+hs,by-hs,bz-hs,1,0,bx+hs,by-hs,bz+hs,1,1,bx-hs,by+hs,bz+hs,0,1,0,-1,0,type);
-    push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx+hs,by+hs,bz-hs,0,0,0,0,-1,type);
-    push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx-hs,by+hs,bz+hs,0,0,0,0,1,type);
+    float abuf[324]; int aidx = 0;
+    push_quad(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,0,0,1,0,0,1.0f);
+    push_quad(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx-hs,by+hs,bz+hs,0,0,-1,0,0,1.0f);
+    push_quad(abuf,&aidx,bx-hs,by+hs,bz+hs,0,0,bx+hs,by+hs,bz+hs,1,0,bx+hs,by+hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,0,1,0,1,0,1.0f);
+    push_quad(abuf,&aidx,bx-hs,by-hs,bz-hs,0,0,bx+hs,by-hs,bz-hs,1,0,bx+hs,by-hs,bz+hs,1,1,bx-hs,by-hs,bz+hs,0,1,0,-1,0,1.0f);
+    push_quad(abuf,&aidx,bx+hs,by-hs,bz-hs,0,1,bx-hs,by-hs,bz-hs,1,1,bx-hs,by+hs,bz-hs,1,0,bx+hs,by+hs,bz-hs,0,0,0,0,-1,1.0f);
+    push_quad(abuf,&aidx,bx-hs,by-hs,bz+hs,0,1,bx+hs,by-hs,bz+hs,1,1,bx+hs,by+hs,bz+hs,1,0,bx-hs,by+hs,bz+hs,0,0,0,0,1,1.0f);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,36,abuf); glEnableVertexAttribArray(0);
     glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,36,abuf+3); glEnableVertexAttribArray(1);
     glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,36,abuf+5); glEnableVertexAttribArray(2);
     glVertexAttribPointer(3,1,GL_FLOAT,GL_FALSE,36,abuf+8); glEnableVertexAttribArray(3);
     glDrawArrays(GL_TRIANGLES, 0, 36);
-    glDisableVertexAttribArray(1); glDisableVertexAttribArray(2); glDisableVertexAttribArray(3);
 }
 
 void render_world(struct engine* eng) {
@@ -152,7 +140,7 @@ void render_world(struct engine* eng) {
     glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, eng->texTreeSide); glUniform1i(glGetUniformLocation(eng->program, "texTreeSide"), 4);
     glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, eng->texTreeTop); glUniform1i(glGetUniformLocation(eng->program, "texTreeTop"), 5);
     float proj[16], view[16], mvp[16];
-    mat4_perspective(proj, GAME_FOV, (float)eng->width/(float)eng->height, 0.1f, 200.0f);
+    mat4_perspective(proj, GAME_FOV, (float)eng->width/(float)eng->height, 0.1f, 150.0f);
     mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
     mat4_mul(mvp, proj, view);
     glUniformMatrix4fv(glGetUniformLocation(eng->program, "m"), 1, GL_FALSE, mvp);
@@ -165,7 +153,6 @@ void render_world(struct engine* eng) {
         glDrawArrays(GL_TRIANGLES, 0, eng->visibleFaceCount * 6);
     }
     render_anim_block(eng);
-    glBindBuffer(GL_ARRAY_BUFFER, 0); 
     glDisableVertexAttribArray(1); glDisableVertexAttribArray(2); glDisableVertexAttribArray(3);
 }
 
