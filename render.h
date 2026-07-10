@@ -133,7 +133,7 @@ static void render_anim_block(struct engine* eng) {
     } else {
         float t = (float)eng->animPlaceTimer / ANIM_PLACE_FRAMES;
         float p = 1.0f - t;
-        scale = sinf(p * PI * 0.8f) * 1.15f; // Прыгающая анимация
+        scale = sinf(p * PI * 0.8f) * 1.15f; 
         if (scale > 1.0f && p > 0.8f) scale = 1.0f;
         eng->animPlaceTimer--;
     }
@@ -234,18 +234,45 @@ void draw_menu(struct engine* eng) {
 void draw_ui(struct engine* eng) {
     int sw=eng->width, sh=eng->height;
     glDisable(GL_DEPTH_TEST); glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    draw_rect_no_tex(sw/2.0f, sh/2.0f, 10, 1, sw, sh, 1,1,1,1); draw_rect_no_tex(sw/2.0f, sh/2.0f, 1, 10, sw, sh, 1,1,1,1);
-    draw_ring(JOY_X_OFFSET, sh-JOY_Y_OFFSET, JOY_RADIUS, 3, sw, sh, 0,0,0,1);
-    draw_circle(JOY_X_OFFSET+eng->moveDirX*JOY_RADIUS*0.6f, sh-JOY_Y_OFFSET+eng->moveDirZ*JOY_RADIUS*0.6f, STICK_RADIUS, sw, sh, 0,0,0,1);
-    draw_ring(sw-JUMP_BTN_OFFSET, sh-JUMP_BTN_OFFSET, JUMP_BTN_SIZE, 3, sw, sh, 0,0,0,1);
-    draw_ring(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,1);
-    draw_ring(sw-PLACE_BTN_X, PLACE_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,1);
     
+    // Прицел
+    draw_rect_no_tex(sw/2.0f, sh/2.0f, 10, 1, sw, sh, 1,1,1,1); 
+    draw_rect_no_tex(sw/2.0f, sh/2.0f, 1, 10, sw, sh, 1,1,1,1);
+    
+    // Джойстик
+    float jx = JOY_X_OFFSET, jy = sh - JOY_Y_OFFSET;
+    draw_ring(jx, jy, JOY_RADIUS, 3, sw, sh, 0,0,0,1);
+    draw_circle(jx + eng->moveDirX*JOY_RADIUS*0.6f, jy + eng->moveDirZ*JOY_RADIUS*0.6f, STICK_RADIUS, sw, sh, 0,0,0,1);
+    
+    // Прыжок
+    float bx = sw - JUMP_BTN_OFFSET, by = sh - JUMP_BTN_OFFSET;
+    draw_ring(bx, by, JUMP_BTN_SIZE, 3, sw, sh, 0,0,0,1);
+    float anx=(bx/sw)*2-1, any=1-(by/sh)*2, as=(JUMP_BTN_SIZE*0.3f/sw)*2, asy=(JUMP_BTN_SIZE*0.3f/sh)*2;
+    float arrow[] = {anx, any+asy, anx-as, any-asy*0.5f, anx+as, any-asy*0.5f};
+    glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), 0,0,0,1);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow); glEnableVertexAttribArray(0);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    
+    // Кнопки действий (Ломать / Ставить)
+    draw_ring(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,1);
+    draw_rect_no_tex(sw-BREAK_BTN_X, BREAK_BTN_Y, 2, ACTION_BTN_SIZE*0.3f, sw, sh, 0,0,0,1); // Крестик упрощенный
+    draw_rect_no_tex(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE*0.3f, 2, sw, sh, 0,0,0,1);
+    
+    draw_ring(sw-PLACE_BTN_X, PLACE_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,1);
+    draw_rect_no_tex(sw-PLACE_BTN_X, PLACE_BTN_Y, 2, ACTION_BTN_SIZE*0.3f, sw, sh, 0,0,0,1);
+    draw_rect_no_tex(sw-PLACE_BTN_X, PLACE_BTN_Y, ACTION_BTN_SIZE*0.3f, 2, sw, sh, 0,0,0,1);
+
+    // Инвентарь
     float invW = INV_SLOTS*(INV_SLOT_SIZE+INV_PADDING);
+    float invStartX = (sw - invW) / 2.0f;
     for(int i=0; i<INV_SLOTS; i++) {
-        float sx = (sw-invW)/2.0f + i*(INV_SLOT_SIZE+INV_PADDING) + INV_SLOT_SIZE/2.0f;
-        draw_rect_no_tex(sx, sh-50, INV_SLOT_SIZE/2.0f, INV_SLOT_SIZE/2.0f, sw, sh, (i==eng->selectedSlot?0.8f:0.2f), 0.2f, 0.2f, 0.8f);
+        float sx = invStartX + i*(INV_SLOT_SIZE+INV_PADDING) + INV_SLOT_SIZE/2.0f;
+        float sy = sh - INV_Y_OFFSET;
+        bool sel = (i == eng->selectedSlot);
+        draw_rect_no_tex(sx, sy, INV_SLOT_SIZE/2.0f, INV_SLOT_SIZE/2.0f, sw, sh, (sel?0.8f:0.15f), 0.15f, 0.15f, 0.85f);
     }
+    
+    glDisable(GL_BLEND); glEnable(GL_DEPTH_TEST);
 }
 
 #endif
