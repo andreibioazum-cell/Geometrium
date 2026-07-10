@@ -55,7 +55,7 @@
 #define INV_Y_OFFSET    50.0f
 
 #define ANIM_BREAK_FRAMES 12
-#define ANIM_PLACE_FRAMES 8
+#define ANIM_PLACE_FRAMES 10
 
 #define STATE_MENU      0
 #define STATE_PLAYING   1
