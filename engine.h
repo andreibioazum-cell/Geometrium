@@ -44,10 +44,12 @@
 
 #define RAY_DIST        6.0f
 #define RAY_STEP        0.02f
-#define MAX_EDITS       512
+#define MAX_EDITS       1024
 
 #define BLOCK_AIR       0
 #define BLOCK_GRASS     1
+#define BLOCK_WOOD      2
+#define BLOCK_LEAVES    3
 
 #define INV_SLOTS       9
 #define INV_SLOT_SIZE   46.0f
@@ -73,9 +75,9 @@ struct engine {
     int32_t width, height;
     GLuint program;
     GLuint invProgram;
-    GLuint texGrassTop;
-    GLuint texGrassSide;
-    GLuint texGrassDown;
+    
+    GLuint texGrassTop, texGrassSide, texGrassDown;
+    GLuint texLeaves, texTreeSide, texTreeTop;
 
     float camPos[3];
     float camRot[2];
