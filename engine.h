@@ -34,7 +34,7 @@
 #define TERM_VEL       -0.25f
 
 /* ----- Мир ----- */
-#define LOAD_RADIUS     32
+#define LOAD_RADIUS     12
 #define WORLD_BUF       (LOAD_RADIUS * 2 + 1)
 #define CHUNK_H         32
 

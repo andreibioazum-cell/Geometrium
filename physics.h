@@ -76,11 +76,16 @@ static void apply_physics(struct engine* eng) {
     }
 
     if (check_inside(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2])) {
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 12; i++) {
             eng->camPos[1] += 0.1f;
             if (!check_inside(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2]))
                 break;
         }
+    }
+
+    if (eng->camPos[1] < 1.5f) {
+        eng->camPos[1] = 1.5f;
+        eng->velY = 0.0f;
     }
 
     if (eng->camPos[1] < -10.0f) {

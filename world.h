@@ -84,12 +84,13 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
 static void generate_tree(struct engine* eng, int baseX, int baseZ) {
     int height = 4 + (int)(fbm_noise((float)baseX, (float)baseZ) * 2.0f) % 2; // 4-5 блоков
     int groundY = get_height(baseX, baseZ);
-    if (groundY + height + 2 >= CHUNK_H) return;
+    int trunkBaseY = groundY - 1;
+    if (trunkBaseY + height + 2 >= CHUNK_H) return;
     
     // Ствол
-    for (int y = 1; y <= height; y++) {
+    for (int y = 0; y < height; y++) {
         int wx = baseX;
-        int wy = groundY + y;
+        int wy = trunkBaseY + y;
         int wz = baseZ;
         if (wy >= 0 && wy < CHUNK_H) {
             int bx, bz;
@@ -107,7 +108,7 @@ static void generate_tree(struct engine* eng, int baseX, int baseZ) {
                 int dist = dx*dx + dz*dz + (dy - height)*(dy - height);
                 if (dist <= crownRadius*crownRadius + 1) {
                     int wx = baseX + dx;
-                    int wy = groundY + dy;
+                    int wy = trunkBaseY + dy;
                     int wz = baseZ + dz;
                     if (wy >= 0 && wy < CHUNK_H) {
                         int bx, bz;
@@ -205,7 +206,7 @@ static void update_world(struct engine* eng) {
     int pz = (int)floorf(-eng->camPos[2]);
     if (!eng->worldLoaded) { load_blocks_around(eng, px, pz); return; }
     int dx = px - eng->loadCenterX, dz = pz - eng->loadCenterZ;
-    int margin = LOAD_RADIUS - 4;
+    int margin = 8;
     if (abs(dx) >= margin || abs(dz) >= margin) load_blocks_around(eng, px, pz);
 }
 

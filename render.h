@@ -166,9 +166,9 @@ static void render_anim_block(struct engine* eng) {
         if (eng->animBreakTimer <= 0) eng->animActive = false;
     } else {
         float t = (float)(ANIM_PLACE_FRAMES - eng->animPlaceTimer) / ANIM_PLACE_FRAMES;
-        scale = 0.3f + t * 0.7f;
-        alpha = 0.5f + t * 0.5f;
-        float bounce = 1.0f + sinf(t * PI) * 0.15f * (1.0f - t);
+        scale = 0.95f;
+        alpha = 0.7f;
+        float bounce = 1.0f + sinf(t * PI) * 0.08f * (1.0f - t);
         scale *= bounce;
         if (scale > 1.0f) scale = 1.0f;
         eng->animPlaceTimer--;
@@ -195,10 +195,9 @@ static void render_anim_block(struct engine* eng) {
     push_quad_n(abuf,&aidx,bx+hs,by-hs,bz-hs,1,1,bx-hs,by-hs,bz-hs,0,1,bx-hs,by+hs,bz-hs,0,0,bx+hs,by+hs,bz-hs,1,0,0,0,-1);
     push_quad_n(abuf,&aidx,bx-hs,by-hs,bz+hs,1,1,bx+hs,by-hs,bz+hs,0,1,bx+hs,by+hs,bz+hs,0,0,bx-hs,by+hs,bz+hs,1,0,0,0,1);
 
-    if (alpha < 1.0f) {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    }
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_DEPTH_TEST);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, abuf);
@@ -209,7 +208,8 @@ static void render_anim_block(struct engine* eng) {
     glEnableVertexAttribArray(2);
     glDrawArrays(GL_TRIANGLES, 0, 36);
 
-    if (alpha < 1.0f) glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
 }
 
 /* ============= ОТРИСОВКА МИРА ============= */
@@ -303,12 +303,12 @@ static void draw_textured_rect(float cx, float cy, float hw, float hh, int sw, i
     float nx = (cx/sw)*2.0f-1.0f, ny = 1.0f-(cy/sh)*2.0f;
     float rw = (hw/sw)*2.0f, rh = (hh/sh)*2.0f;
     float v[] = {
-        nx-rw, ny-rh, 0.0f, 0.0f,
-        nx+rw, ny-rh, 1.0f, 0.0f,
-        nx+rw, ny+rh, 1.0f, 1.0f,
-        nx-rw, ny-rh, 0.0f, 0.0f,
-        nx+rw, ny+rh, 1.0f, 1.0f,
-        nx-rw, ny+rh, 0.0f, 1.0f
+        nx-rw, ny-rh, 0.0f, 1.0f,
+        nx+rw, ny-rh, 1.0f, 1.0f,
+        nx+rw, ny+rh, 1.0f, 0.0f,
+        nx-rw, ny-rh, 0.0f, 1.0f,
+        nx+rw, ny+rh, 1.0f, 0.0f,
+        nx-rw, ny+rh, 0.0f, 0.0f
     };
     glUseProgram(uiProg);
     glActiveTexture(GL_TEXTURE0);
@@ -424,10 +424,10 @@ void draw_menu(struct engine* eng) {
 /* ============= UI ИГРЫ (инвентарь с правильными UV) ============= */
 static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size, unsigned char type) {
     (void)type;
-    float half = size * 0.5f;
-    draw_textured_rect(screenX, screenY, half, half * 0.9f,
+    float half = size * 0.7f;
+    draw_textured_rect(screenX, screenY, half, half * 0.95f,
                        eng->width, eng->height, eng->texGrassSide);
-    draw_border(screenX, screenY, half, half * 0.9f, 1.0f, eng->width, eng->height,
+    draw_border(screenX, screenY, half, half * 0.95f, 1.0f, eng->width, eng->height,
                 0.0f, 0.0f, 0.0f, 0.75f);
 }
 
