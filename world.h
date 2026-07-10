@@ -81,10 +81,13 @@ static void try_place_tree(struct engine* eng, int bx, int bz, int h) {
     int wx = eng->loadCenterX - LOAD_RADIUS + bx;
     int wz = eng->loadCenterZ - LOAD_RADIUS + bz;
     unsigned int hsh = hash2d(wx, wz);
-    // Шанс уменьшен: теперь 1 из 150 (было 60)
+    
+    // Шанс 1 на 150
     if ((hsh % 150) == 0 && bx > 2 && bx < WORLD_BUF-3 && bz > 2 && bz < WORLD_BUF-3) {
         int treeH = 3 + (hsh % 3);
+        // Ствол из травы
         for (int i = 0; i < treeH; i++) eng->blocks[bx][h+i][bz] = BLOCK_GRASS;
+        // Листва из травы
         for (int lx = -1; lx <= 1; lx++) {
             for (int lz = -1; lz <= 1; lz++) {
                 for (int ly = 0; ly < 2; ly++) {
@@ -101,6 +104,8 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
     eng->loadCenterX = cx;
     eng->loadCenterZ = cz;
     memset(eng->blocks, 0, sizeof(eng->blocks));
+    
+    // 1. Ландшафт
     for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
             int bx = dx + LOAD_RADIUS, bz = dz + LOAD_RADIUS;
@@ -108,6 +113,7 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
             for (int y = 0; y < h; y++) eng->blocks[bx][y][bz] = BLOCK_GRASS;
         }
     }
+    // 2. Деревья (из травы)
     for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
             int bx = dx + LOAD_RADIUS, bz = dz + LOAD_RADIUS;
@@ -115,6 +121,7 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
             try_place_tree(eng, bx, bz, h);
         }
     }
+    // 3. Изменения игрока
     for (int i = 0; i < eng->editCount; i++) {
         struct block_edit* e = &eng->edits[i];
         int bx, bz;
@@ -204,6 +211,10 @@ static void inv_add_block(struct engine* eng, unsigned char type) {
 }
 
 static void start_block_anim(struct engine* eng, int wx, int wy, int wz, bool breaking) {
+    // СБРОС ТАЙМЕРОВ (чтобы анимация не "зацикливалась" при спаме)
+    eng->animBreakTimer = 0;
+    eng->animPlaceTimer = 0;
+    
     eng->animActive = true;
     eng->animBlockX = (float)wx;
     eng->animBlockY = (float)wy;
