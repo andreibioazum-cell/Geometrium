@@ -41,7 +41,6 @@ static GLuint load_texture(struct android_app* app, const char* filename) {
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
-    // ПИКСЕЛИЗАЦИЯ (NEAREST вместо LINEAR)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
@@ -64,9 +63,16 @@ void init_textures(struct engine* eng) {
     eng->texGrassTop = load_texture(eng->app, "grass_top.png");
     eng->texGrassSide = load_texture(eng->app, "grass_side.png");
     eng->texGrassDown = load_texture(eng->app, "grass_down.png");
+    eng->texLeaves = load_texture(eng->app, "foliage.png");
+    eng->texTreeSide = load_texture(eng->app, "tree_side.png");
+    eng->texTreeTop = load_texture(eng->app, "tree_top_down.png");
+
     if (!eng->texGrassTop) eng->texGrassTop = make_color_tex(100, 180, 60);
     if (!eng->texGrassSide) eng->texGrassSide = make_color_tex(120, 100, 70);
     if (!eng->texGrassDown) eng->texGrassDown = make_color_tex(140, 110, 70);
+    if (!eng->texLeaves) eng->texLeaves = make_color_tex(40, 120, 40);
+    if (!eng->texTreeSide) eng->texTreeSide = make_color_tex(90, 70, 40);
+    if (!eng->texTreeTop) eng->texTreeTop = make_color_tex(100, 80, 50);
 }
 
 static void push_quad_n(float* buf, int* idx,
@@ -155,8 +161,6 @@ static void render_anim_block(struct engine* eng) {
     glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,32,abuf+3); glEnableVertexAttribArray(1);
     glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,32,abuf+5); glEnableVertexAttribArray(2);
     glDrawArrays(GL_TRIANGLES, 0, 36);
-    
-    // СБРОС СОСТОЯНИЙ (чтобы UI не пропадал)
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(2);
 }
@@ -242,20 +246,11 @@ static void draw_circle(float cx, float cy, float r, int w, int h, float cr, flo
     glDrawArrays(GL_TRIANGLE_FAN,0,26);
 }
 
-static void draw_digit(float cx, float cy, float sz, int d, int sw, int sh, float cr, float cg, float cb) {
-    float w=sz*0.4f, h=sz*0.5f, t=sz*0.12f;
-    bool s[10][7]={{1,0,1,1,1,1,1},{0,0,0,0,1,0,1},{1,1,1,0,1,1,0},{1,1,1,0,1,0,1},{0,1,0,1,1,0,1},{1,1,1,1,0,0,1},{1,1,1,1,0,1,1},{1,0,0,0,1,0,1},{1,1,1,1,1,1,1},{1,1,1,1,1,0,1}};
-    if(d<0||d>9) return;
-    if(s[d][0]) draw_rect_no_tex(cx,cy-h,w,t,sw,sh,cr,cg,cb,1); if(s[d][1]) draw_rect_no_tex(cx,cy,w,t,sw,sh,cr,cg,cb,1); if(s[d][2]) draw_rect_no_tex(cx,cy+h,w,t,sw,sh,cr,cg,cb,1);
-    if(s[d][3]) draw_rect_no_tex(cx-w,cy-h*0.5f,t,h*0.5f+t,sw,sh,cr,cg,cb,1); if(s[d][4]) draw_rect_no_tex(cx+w,cy-h*0.5f,t,h*0.5f+t,sw,sh,cr,cg,cb,1);
-    if(s[d][5]) draw_rect_no_tex(cx-w,cy+h*0.5f,t,h*0.5f+t,sw,sh,cr,cg,cb,1); if(s[d][6]) draw_rect_no_tex(cx+w,cy+h*0.5f,t,h*0.5f+t,sw,sh,cr,cg,cb,1);
-}
-
-void draw_menu(struct engine* eng) {
-    int sw=eng->width, sh=eng->height;
-    draw_rect_no_tex(sw/2.0f, sh/2.0f, sw/2.0f, sh/2.0f, sw, sh, 0.2f,0.6f,0.3f, 1);
-    draw_digit(sw/2.0f-60, sh*0.25f, 18, 5, sw, sh, 1,1,1); draw_digit(sw/2.0f-20, sh*0.25f, 18, 3, sw, sh, 1,1,1);
-    draw_digit(sw/2.0f+20, sh*0.25f, 18, 3, sw, sh, 1,1,1); draw_digit(sw/2.0f+60, sh*0.25f, 18, 0, sw, sh, 1,1,1);
+static void draw_border(float cx, float cy, float hw, float hh, float t, int sw, int sh, float cr, float cg, float cb, float ca) {
+    draw_rect_no_tex(cx, cy-hh+t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx, cy+hh-t*0.5f, hw, t*0.5f, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx-hw+t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
+    draw_rect_no_tex(cx+hw-t*0.5f, cy, t*0.5f, hh, sw, sh, cr,cg,cb,ca);
 }
 
 void draw_ui(struct engine* eng) {
@@ -266,36 +261,49 @@ void draw_ui(struct engine* eng) {
     draw_rect_no_tex(sw/2.0f, sh/2.0f, 12, 1.5f, sw, sh, 1,1,1,0.8f); 
     draw_rect_no_tex(sw/2.0f, sh/2.0f, 1.5f, 12, sw, sh, 1,1,1,0.8f);
     
-    // ДЖОЙСТИК
+    // ДЖОЙСТИК (черный)
     float jx = JOY_X_OFFSET, jy = sh - JOY_Y_OFFSET;
-    draw_ring(jx, jy, JOY_RADIUS, 4, sw, sh, 1,1,1,0.3f);
-    draw_circle(jx + eng->moveDirX*JOY_RADIUS*0.6f, jy + eng->moveDirZ*JOY_RADIUS*0.6f, STICK_RADIUS, sw, sh, 1,1,1,0.6f);
+    draw_ring(jx, jy, JOY_RADIUS, 4, sw, sh, 0,0,0,0.5f);
+    draw_circle(jx + eng->moveDirX*JOY_RADIUS*0.6f, jy + eng->moveDirZ*JOY_RADIUS*0.6f, STICK_RADIUS, sw, sh, 0,0,0,0.8f);
     
-    // ПРЫЖОК
+    // ПРЫЖОК (черный)
     float bx = sw - JUMP_BTN_OFFSET, by = sh - JUMP_BTN_OFFSET;
-    draw_ring(bx, by, JUMP_BTN_SIZE, 4, sw, sh, 1,1,1,0.3f);
+    draw_ring(bx, by, JUMP_BTN_SIZE, 4, sw, sh, 0,0,0,0.5f);
+    
+    // СТРЕЛКА (черная)
+    float nx = (bx/sw)*2.0f-1.0f, ny = 1.0f-(by/sh)*2.0f;
+    float asx = (20.0f/sw)*2.0f, asy = (20.0f/sh)*2.0f;
+    float arrow[] = { nx, ny+asy, nx-asx, ny-asy*0.5f, nx+asx, ny-asy*0.5f };
+    glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), 0,0,0,0.8f);
+    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 0);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow); glEnableVertexAttribArray(0);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
     
     // КНОПКИ ДЕЙСТВИЙ
-    draw_ring(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 1,1,1,0.3f);
-    draw_rect_no_tex(sw-BREAK_BTN_X, BREAK_BTN_Y, 8, 2, sw, sh, 1,0,0,0.8f); // Минус для ломания
+    draw_ring(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,0.5f);
+    draw_rect_no_tex(sw-BREAK_BTN_X, BREAK_BTN_Y, 8, 2, sw, sh, 0,0,0,1); 
     
-    draw_ring(sw-PLACE_BTN_X, PLACE_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 1,1,1,0.3f);
-    draw_rect_no_tex(sw-PLACE_BTN_X, PLACE_BTN_Y, 8, 2, sw, sh, 0,1,0,0.8f); // Плюс для става
-    draw_rect_no_tex(sw-PLACE_BTN_X, PLACE_BTN_Y, 2, 8, sw, sh, 0,1,0,0.8f);
+    draw_ring(sw-PLACE_BTN_X, PLACE_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,0.5f);
+    draw_rect_no_tex(sw-PLACE_BTN_X, PLACE_BTN_Y, 8, 2, sw, sh, 0,0,0,1);
+    draw_rect_no_tex(sw-PLACE_BTN_X, PLACE_BTN_Y, 2, 8, sw, sh, 0,0,0,1);
 
-    // ИНВЕНТАРЬ (ВОССТАНОВЛЕНЫ ТЕКСТУРЫ)
+    // ИНВЕНТАРЬ
     float invW = INV_SLOTS*(INV_SLOT_SIZE+INV_PADDING);
     float invStartX = (sw - invW) / 2.0f;
     for(int i=0; i<INV_SLOTS; i++) {
         float sx = invStartX + i*(INV_SLOT_SIZE+INV_PADDING) + INV_SLOT_SIZE/2.0f;
         float sy = sh - INV_Y_OFFSET;
         bool sel = (i == eng->selectedSlot);
-        draw_rect_no_tex(sx, sy, INV_SLOT_SIZE/2.0f, INV_SLOT_SIZE/2.0f, sw, sh, 0.1f, 0.1f, 0.1f, 0.6f);
-        if(sel) draw_ring(sx, sy, INV_SLOT_SIZE/2.0f, 3, sw, sh, 1,1,1,0.9f);
         
-        if(eng->invSlots[i] == BLOCK_GRASS) {
-            draw_rect_tex(sx, sy, INV_SLOT_SIZE*0.35f, INV_SLOT_SIZE*0.35f, sw, sh, eng->texGrassSide);
-        }
+        draw_rect_no_tex(sx, sy, INV_SLOT_SIZE/2.0f, INV_SLOT_SIZE/2.0f, sw, sh, 0.1f, 0.1f, 0.1f, 0.6f);
+        if(sel) draw_border(sx, sy, INV_SLOT_SIZE/2.0f, INV_SLOT_SIZE/2.0f, 3, sw, sh, 1,1,1,0.9f);
+        
+        GLuint icon = 0;
+        if(eng->invSlots[i] == BLOCK_GRASS) icon = eng->texGrassSide;
+        if(eng->invSlots[i] == BLOCK_WOOD) icon = eng->texTreeSide;
+        if(eng->invSlots[i] == BLOCK_LEAVES) icon = eng->texLeaves;
+        
+        if(icon) draw_rect_tex(sx, sy, INV_SLOT_SIZE*0.35f, INV_SLOT_SIZE*0.35f, sw, sh, icon);
     }
     
     glDisable(GL_BLEND);
