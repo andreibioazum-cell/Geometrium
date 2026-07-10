@@ -82,8 +82,9 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
 
 /* ----- Генерация дерева (упрощённая, но с гарантией появления) ----- */
 static void generate_tree(struct engine* eng, int baseX, int baseZ) {
-    int height = 5 + (int)(fbm_noise((float)baseX, (float)baseZ) * 3) % 3; // 5-7 блоков
+    int height = 4 + (int)(fbm_noise((float)baseX, (float)baseZ) * 2.0f) % 2; // 4-5 блоков
     int groundY = get_height(baseX, baseZ);
+    if (groundY + height + 2 >= CHUNK_H) return;
     
     // Ствол
     for (int y = 1; y <= height; y++) {
@@ -98,13 +99,13 @@ static void generate_tree(struct engine* eng, int baseX, int baseZ) {
         }
     }
     
-    // Крона - простая сфера
-    int crownRadius = 2;
+    // Крона - компактная и не выходящая за пределы мира
+    int crownRadius = 1;
     for (int dx = -crownRadius; dx <= crownRadius; dx++) {
         for (int dz = -crownRadius; dz <= crownRadius; dz++) {
-            for (int dy = height - 2; dy <= height + 1; dy++) {
+            for (int dy = height - 1; dy <= height + 1; dy++) {
                 int dist = dx*dx + dz*dz + (dy - height)*(dy - height);
-                if (dist <= crownRadius*crownRadius + 2) {
+                if (dist <= crownRadius*crownRadius + 1) {
                     int wx = baseX + dx;
                     int wy = groundY + dy;
                     int wz = baseZ + dz;
@@ -141,7 +142,7 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
     // Деревья - гарантированно появляются на траве
     int treeCount = 0;
     int attempts = 0;
-    while (treeCount < 20 && attempts < 200) {
+    while (treeCount < 8 && attempts < 120) {
         attempts++;
         int dx = (rand() % (LOAD_RADIUS * 2)) - LOAD_RADIUS;
         int dz = (rand() % (LOAD_RADIUS * 2)) - LOAD_RADIUS;
@@ -227,7 +228,7 @@ static void update_world(struct engine* eng) {
     int pz = (int)floorf(-eng->camPos[2]);
     if (!eng->worldLoaded) { load_blocks_around(eng, px, pz); return; }
     int dx = px - eng->loadCenterX, dz = pz - eng->loadCenterZ;
-    if (dx * dx + dz * dz > 36) load_blocks_around(eng, px, pz);
+    if (dx * dx + dz * dz > (LOAD_RADIUS / 2) * (LOAD_RADIUS / 2)) load_blocks_around(eng, px, pz);
 }
 
 static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {

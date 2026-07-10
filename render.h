@@ -54,8 +54,8 @@ static GLuint load_texture(struct android_app* app, const char* filename) {
     GLuint tex;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
@@ -398,33 +398,29 @@ void draw_menu(struct engine* eng) {
 }
 
 /* ============= UI ИГРЫ (инвентарь с правильными UV) ============= */
-static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size) {
-    float ndcX = (screenX / eng->width) * 2.0f - 1.0f;
-    float ndcY = 1.0f - (screenY / eng->height) * 2.0f;
-    float s = size / eng->height * 2.0f;
-    
-    // Правильные UV координаты для квадрата
-    float verts[] = {
-        ndcX - s, ndcY - s, 0.0f, 0.0f,
-        ndcX + s, ndcY - s, 1.0f, 0.0f,
-        ndcX + s, ndcY + s, 1.0f, 1.0f,
-        ndcX - s, ndcY - s, 0.0f, 0.0f,
-        ndcX + s, ndcY + s, 1.0f, 1.0f,
-        ndcX - s, ndcY + s, 0.0f, 1.0f
-    };
-    
-    glUseProgram(uiProg);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, eng->texGrassSide);
-    glUniform1i(glGetUniformLocation(uiProg, "tex"), 0);
-    glUniform4f(glGetUniformLocation(uiProg, "col"), 1.0f, 1.0f, 1.0f, 1.0f);
-    glUniform1i(glGetUniformLocation(uiProg, "useTex"), 1);
-    
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, verts + 2);
-    glEnableVertexAttribArray(1);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+static void render_inv_block_2d(struct engine* eng, float screenX, float screenY, float size, unsigned char type) {
+    float half = size * 0.5f;
+    float topW = size * 0.78f;
+    float topH = size * 0.28f;
+    float offX = size * 0.12f;
+    float offY = size * 0.12f;
+
+    float r = 0.8f, g = 0.8f, b = 0.8f;
+    switch (type) {
+        case BLOCK_GRASS: r = 0.28f; g = 0.72f; b = 0.24f; break;
+        case BLOCK_WOOD:  r = 0.44f; g = 0.28f; b = 0.16f; break;
+        case BLOCK_LEAVES:r = 0.22f; g = 0.62f; b = 0.22f; break;
+        default: break;
+    }
+
+    draw_rect_no_tex(screenX + offX, screenY + offY, topW * 0.5f, topH * 0.5f,
+                     eng->width, eng->height, r * 0.72f, g * 0.72f, b * 0.72f, 1.0f);
+    draw_rect_no_tex(screenX, screenY, half, half * 0.8f,
+                     eng->width, eng->height, r, g, b, 1.0f);
+    draw_border(screenX, screenY, half, half * 0.8f, 1.0f, eng->width, eng->height,
+                0.0f, 0.0f, 0.0f, 0.75f);
+    draw_rect_no_tex(screenX - half * 0.16f, screenY + half * 0.2f, half * 0.16f, half * 0.12f,
+                     eng->width, eng->height, 1.0f, 1.0f, 1.0f, 0.35f);
 }
 
 void draw_ui(struct engine* eng) {
@@ -503,7 +499,7 @@ void draw_ui(struct engine* eng) {
         draw_border(slotX, invY, hs, hs, 2.0f, sw, sh,
                     sel?1.0f:0.35f, sel?1.0f:0.35f, sel?1.0f:0.35f, 1.0f);
         if (eng->invSlots[i] != BLOCK_AIR) {
-            render_inv_block_2d(eng, slotX, invY, hs*0.6f);
+            render_inv_block_2d(eng, slotX, invY, hs * 0.6f, eng->invSlots[i]);
         }
     }
 
