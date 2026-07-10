@@ -81,12 +81,10 @@ static void try_place_tree(struct engine* eng, int bx, int bz, int h) {
     int wx = eng->loadCenterX - LOAD_RADIUS + bx;
     int wz = eng->loadCenterZ - LOAD_RADIUS + bz;
     unsigned int hsh = hash2d(wx, wz);
-    
     if ((hsh % 140) == 0 && bx > 4 && bx < WORLD_BUF-5 && bz > 4 && bz < WORLD_BUF-5) {
         for(int ox=-3; ox<=3; ox++)
             for(int oz=-3; oz<=3; oz++)
                 if(eng->blocks[bx+ox][h+1][bz+oz] == BLOCK_WOOD) return;
-
         int treeH = 4 + (hsh % 3);
         for (int i = 0; i < treeH; i++) eng->blocks[bx][h+i][bz] = BLOCK_WOOD;
         for (int lx = -2; lx <= 2; lx++)
@@ -100,10 +98,8 @@ static void try_place_tree(struct engine* eng, int bx, int bz, int h) {
 }
 
 static void load_blocks_around(struct engine* eng, int cx, int cz) {
-    eng->loadCenterX = cx;
-    eng->loadCenterZ = cz;
+    eng->loadCenterX = cx; eng->loadCenterZ = cz;
     memset(eng->blocks, 0, sizeof(eng->blocks));
-    
     for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
             int bx = dx + LOAD_RADIUS, bz = dz + LOAD_RADIUS;
@@ -123,8 +119,7 @@ static void load_blocks_around(struct engine* eng, int cx, int cz) {
         if (bx >= 0 && bx < WORLD_BUF && bz >= 0 && bz < WORLD_BUF && e->wy >= 0 && e->wy < CHUNK_H)
             eng->blocks[bx][e->wy][bz] = e->val;
     }
-    eng->worldLoaded = true;
-    eng->meshDirty = true;
+    eng->worldLoaded = true; eng->meshDirty = true;
 }
 
 static void world_set_block(struct engine* eng, int wx, int wy, int wz, unsigned char val) {
@@ -178,16 +173,13 @@ static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {
 }
 
 static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ, int* prevX, int* prevY, int* prevZ) {
-    float dx, dy, dz;
-    get_look_dir(eng, &dx, &dy, &dz);
+    float dx, dy, dz; get_look_dir(eng, &dx, &dy, &dz);
     float len = sqrtf(dx*dx+dy*dy+dz*dz);
     if (len < 0.001f) return false;
     dx/=len; dy/=len; dz/=len;
-    *prevX=-9999;*prevY=-9999;*prevZ=-9999;
-    int lx=-9999,ly=-9999,lz=-9999;
+    *prevX=-9999; int lx=-9999,ly=-9999,lz=-9999;
     for (float t=0.1f; t<RAY_DIST; t+=RAY_STEP) {
-        int wx,wy,wz;
-        pos_to_block(eng->camPos[0]+dx*t,eng->camPos[1]+dy*t,eng->camPos[2]+dz*t,&wx,&wy,&wz);
+        int wx,wy,wz; pos_to_block(eng->camPos[0]+dx*t,eng->camPos[1]+dy*t,eng->camPos[2]+dz*t,&wx,&wy,&wz);
         if (wx==lx&&wy==ly&&wz==lz) continue;
         if (world_block_at(eng,wx,wy,wz)>0) {
             *hitX=wx;*hitY=wy;*hitZ=wz;*prevX=lx;*prevY=ly;*prevZ=lz; return true;
@@ -197,46 +189,45 @@ static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ, int* pr
     return false;
 }
 
-// РЕАЛЬНОЕ ДОБАВЛЕНИЕ В ИНВЕНТАРЬ
 static void inv_add_block(struct engine* eng, unsigned char type) {
     if (type == BLOCK_AIR) return;
     for (int i = 0; i < INV_SLOTS; i++)
-        if (eng->invSlots[i] == BLOCK_AIR) {
-            eng->invSlots[i] = type;
-            return;
-        }
+        if (eng->invSlots[i] == BLOCK_AIR) { eng->invSlots[i] = type; return; }
 }
 
 static void start_block_anim(struct engine* eng, int wx, int wy, int wz, bool breaking) {
-    eng->animBreakTimer = 0;
-    eng->animPlaceTimer = 0;
-    eng->animActive = true;
-    eng->animBlockX = (float)wx;
-    eng->animBlockY = (float)wy;
-    eng->animBlockZ = -(float)wz;
+    eng->animBreakTimer = 0; eng->animPlaceTimer = 0; eng->animActive = true;
+    eng->animBlockX = (float)wx; eng->animBlockY = (float)wy; eng->animBlockZ = -(float)wz;
     eng->animIsBreak = breaking;
     if (breaking) eng->animBreakTimer = ANIM_BREAK_FRAMES;
     else eng->animPlaceTimer = ANIM_PLACE_FRAMES;
 }
 
+// ДОЛГОЕ ЛОМАНИЕ
 static void break_block(struct engine* eng) {
-    int hx,hy,hz,px,py,pz;
-    if (raycast(eng,&hx,&hy,&hz,&px,&py,&pz)) {
-        if (hy<=0) return;
-        unsigned char type = world_block_at(eng, hx, hy, hz);
-        start_block_anim(eng, hx, hy, hz, true);
-        world_set_block(eng,hx,hy,hz,BLOCK_AIR);
-        inv_add_block(eng, type); // Блок попал в инвентарь
-    }
+    int hx, hy, hz, px, py, pz;
+    if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
+        if (hy <= 0) return;
+        if (eng->miningX != hx || eng->miningY != hy || eng->miningZ != hz) {
+            eng->miningProgress = 0;
+            eng->miningX = hx; eng->miningY = hy; eng->miningZ = hz;
+        }
+        eng->miningProgress += 0.08f; // Регулировка времени ломания
+        if (eng->miningProgress >= 1.0f) {
+            unsigned char type = world_block_at(eng, hx, hy, hz);
+            start_block_anim(eng, hx, hy, hz, true);
+            world_set_block(eng, hx, hy, hz, BLOCK_AIR);
+            inv_add_block(eng, type);
+            eng->miningProgress = 0;
+        }
+    } else eng->miningProgress = 0;
 }
 
 static void place_block(struct engine* eng) {
     int hx,hy,hz,px,py,pz;
     if (!raycast(eng,&hx,&hy,&hz,&px,&py,&pz)) return;
-    
     unsigned char type = eng->invSlots[eng->selectedSlot];
-    if (type == BLOCK_AIR) return; // Нет блоков - нельзя ставить
-
+    if (type == BLOCK_AIR) return;
     if (px==-9999||py<0||py>=CHUNK_H) return;
     if (world_block_at(eng,px,py,pz)>0) return;
     float bRx=(float)px,bRy=(float)py,bRz=-(float)pz;
@@ -244,10 +235,9 @@ static void place_block(struct engine* eng) {
     if ((eng->camPos[0]+PLAYER_W>bRx-0.5f)&&(eng->camPos[0]-PLAYER_W<bRx+0.5f)&&
         (eng->camPos[2]+PLAYER_W>bRz-0.5f)&&(eng->camPos[2]-PLAYER_W<bRz+0.5f)&&
         (headY>bRy-0.5f)&&(footY<bRy+0.5f)) return;
-        
     start_block_anim(eng, px, py, pz, false);
     world_set_block(eng,px,py,pz,type);
-    eng->invSlots[eng->selectedSlot] = BLOCK_AIR; // Блок ПОТРАЧЕН
+    eng->invSlots[eng->selectedSlot] = BLOCK_AIR; // Расход
 }
 
 #endif
