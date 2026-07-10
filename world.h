@@ -6,7 +6,7 @@
 #include "engine.h"
 #include "math_utils.h"
 
-extern unsigned int game_seed;   // теперь extern
+extern unsigned int game_seed;
 
 static unsigned int hash2d(int x, int z) {
     unsigned int h = (unsigned int)(x * 374761393 + z * 668265263 + game_seed * 1103515245);
@@ -48,7 +48,7 @@ static int get_height(int wx, int wz) {
     float h = fbm_noise((float)wx, (float)wz);
     int height = (int)(h) + 8;
     if (height < 2) height = 2;
-    if (height >= CHUNK_H - 1) height = CHUNK_H - 2;
+    if (height >= CHUNK_H - 8) height = CHUNK_H - 9; // Запас для деревьев
     return height;
 }
 
@@ -77,23 +77,55 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
     return eng->blocks[bx][wy][bz];
 }
 
+static void try_place_tree(struct engine* eng, int bx, int bz, int h) {
+    int wx = eng->loadCenterX - LOAD_RADIUS + bx;
+    int wz = eng->loadCenterZ - LOAD_RADIUS + bz;
+    unsigned int hsh = hash2d(wx, wz);
+    // Шанс 2% на дерево, подальше от краев буфера
+    if ((hsh % 60) == 0 && bx > 2 && bx < WORLD_BUF-3 && bz > 2 && bz < WORLD_BUF-3) {
+        int treeH = 3 + (hsh % 3);
+        // Ствол
+        for (int i = 0; i < treeH; i++) eng->blocks[bx][h+i][bz] = BLOCK_GRASS;
+        // Листва
+        for (int lx = -1; lx <= 1; lx++) {
+            for (int lz = -1; lz <= 1; lz++) {
+                for (int ly = 0; ly < 2; ly++) {
+                    int yy = h + treeH + ly;
+                    if (eng->blocks[bx+lx][yy][bz+lz] == 0)
+                        eng->blocks[bx+lx][yy][bz+lz] = BLOCK_GRASS;
+                }
+            }
+        }
+    }
+}
+
 static void load_blocks_around(struct engine* eng, int cx, int cz) {
     eng->loadCenterX = cx;
     eng->loadCenterZ = cz;
     memset(eng->blocks, 0, sizeof(eng->blocks));
-    for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++)
+    
+    // 1. Земля
+    for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
         for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
             int bx = dx + LOAD_RADIUS, bz = dz + LOAD_RADIUS;
             int h = get_height(cx + dx, cz + dz);
-            for (int y = 0; y < h; y++)
-                eng->blocks[bx][y][bz] = BLOCK_GRASS;
+            for (int y = 0; y < h; y++) eng->blocks[bx][y][bz] = BLOCK_GRASS;
         }
+    }
+    // 2. Деревья
+    for (int dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+        for (int dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
+            int bx = dx + LOAD_RADIUS, bz = dz + LOAD_RADIUS;
+            int h = get_height(cx + dx, cz + dz);
+            try_place_tree(eng, bx, bz, h);
+        }
+    }
+    // 3. Эдиты
     for (int i = 0; i < eng->editCount; i++) {
         struct block_edit* e = &eng->edits[i];
         int bx, bz;
         world_to_buf(eng, e->wx, e->wz, &bx, &bz);
-        if (bx >= 0 && bx < WORLD_BUF && bz >= 0 && bz < WORLD_BUF &&
-            e->wy >= 0 && e->wy < CHUNK_H)
+        if (bx >= 0 && bx < WORLD_BUF && bz >= 0 && bz < WORLD_BUF && e->wy >= 0 && e->wy < CHUNK_H)
             eng->blocks[bx][e->wy][bz] = e->val;
     }
     eng->worldLoaded = true;
@@ -106,12 +138,13 @@ static void world_set_block(struct engine* eng, int wx, int wy, int wz, unsigned
     world_to_buf(eng, wx, wz, &bx, &bz);
     if (bx < 0 || bx >= WORLD_BUF || bz < 0 || bz >= WORLD_BUF) return;
     eng->blocks[bx][wy][bz] = val;
+    bool found = false;
     for (int i = 0; i < eng->editCount; i++) {
         if (eng->edits[i].wx == wx && eng->edits[i].wy == wy && eng->edits[i].wz == wz) {
-            eng->edits[i].val = val; eng->meshDirty = true; return;
+            eng->edits[i].val = val; found = true; break;
         }
     }
-    if (eng->editCount < MAX_EDITS) {
+    if (!found && eng->editCount < MAX_EDITS) {
         struct block_edit* e = &eng->edits[eng->editCount++];
         e->wx = wx; e->wy = wy; e->wz = wz; e->val = val;
     }
@@ -138,8 +171,10 @@ static void update_world(struct engine* eng) {
     int px = (int)floorf(eng->camPos[0]);
     int pz = (int)floorf(-eng->camPos[2]);
     if (!eng->worldLoaded) { load_blocks_around(eng, px, pz); return; }
-    int dx = px - eng->loadCenterX, dz = pz - eng->loadCenterZ;
-    if (dx * dx + dz * dz > 36) load_blocks_around(eng, px, pz);
+    int dx = px - eng->loadCenterX;
+    int dz = pz - eng->loadCenterZ;
+    // Увеличен порог до 16 блоков для стабильности рендера
+    if (dx * dx + dz * dz > 256) load_blocks_around(eng, px, pz);
 }
 
 static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {
@@ -148,8 +183,7 @@ static void get_look_dir(struct engine* eng, float* dx, float* dy, float* dz) {
     *dx = -view[2]; *dy = -view[6]; *dz = -view[10];
 }
 
-static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ,
-                    int* prevX, int* prevY, int* prevZ) {
+static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ, int* prevX, int* prevY, int* prevZ) {
     float dx, dy, dz;
     get_look_dir(eng, &dx, &dy, &dz);
     float len = sqrtf(dx*dx+dy*dy+dz*dz);
@@ -171,12 +205,9 @@ static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ,
 
 static void inv_add_block(struct engine* eng, unsigned char type) {
     for (int i = 0; i < INV_SLOTS; i++)
-        if (eng->invSlots[i] == BLOCK_AIR) { eng->invSlots[i] = type; return; }
-}
-
-static bool inv_use_block(struct engine* eng) {
-    if (eng->invSlots[eng->selectedSlot] == BLOCK_AIR) return false;
-    eng->invSlots[eng->selectedSlot] = BLOCK_AIR; return true;
+        if (eng->invSlots[i] == BLOCK_GRASS) return; // Уже есть трава
+    for (int i = 0; i < INV_SLOTS; i++)
+        if (eng->invSlots[i] == BLOCK_AIR) { eng->invSlots[i] = BLOCK_GRASS; return; }
 }
 
 static void start_block_anim(struct engine* eng, int wx, int wy, int wz, bool breaking) {
@@ -193,10 +224,9 @@ static void break_block(struct engine* eng) {
     int hx,hy,hz,px,py,pz;
     if (raycast(eng,&hx,&hy,&hz,&px,&py,&pz)) {
         if (hy<=0) return;
-        unsigned char type = (unsigned char)world_block_at(eng, hx, hy, hz);
         start_block_anim(eng, hx, hy, hz, true);
         world_set_block(eng,hx,hy,hz,BLOCK_AIR);
-        inv_add_block(eng, type);
+        inv_add_block(eng, BLOCK_GRASS);
     }
 }
 
@@ -210,7 +240,6 @@ static void place_block(struct engine* eng) {
     if ((eng->camPos[0]+PLAYER_W>bRx-0.5f)&&(eng->camPos[0]-PLAYER_W<bRx+0.5f)&&
         (eng->camPos[2]+PLAYER_W>bRz-0.5f)&&(eng->camPos[2]-PLAYER_W<bRz+0.5f)&&
         (headY>bRy-0.5f)&&(footY<bRy+0.5f)) return;
-    if (!inv_use_block(eng)) return;
     start_block_anim(eng, px, py, pz, false);
     world_set_block(eng,px,py,pz,BLOCK_GRASS);
 }
