@@ -6,31 +6,30 @@
 #include <GLES2/gl2.h>
 #include <stdbool.h>
 
-#define JOY_RADIUS      80.0f
-#define JOY_X_OFFSET    130.0f
-#define JOY_Y_OFFSET    130.0f
-#define STICK_RADIUS    32.0f
-#define JUMP_BTN_SIZE   80.0f
+#define PI 3.14159265f
+#define JOY_RADIUS 80.0f
+#define JOY_X_OFFSET 130.0f
+#define JOY_Y_OFFSET 130.0f
+#define STICK_RADIUS 32.0f
+#define JUMP_BTN_SIZE 80.0f
 #define JUMP_BTN_OFFSET 130.0f
 #define ACTION_BTN_SIZE 45.0f
-#define BREAK_BTN_X     80.0f
-#define BREAK_BTN_Y     80.0f
-#define PLACE_BTN_X     80.0f
-#define PLACE_BTN_Y     190.0f
+#define BREAK_BTN_X 80.0f
+#define BREAK_BTN_Y 80.0f
+#define PLACE_BTN_X 80.0f
+#define PLACE_BTN_Y 190.0f
 
-#define PI              3.14159265f
-#define PLAYER_W        0.4f
-#define EYE_H           1.65f
-#define HEAD_MARGIN     0.15f
-#define GAME_FOV        1.4915f
-#define GRAVITY         0.005f
-#define JUMP_FORCE      0.12f
-#define TERM_VEL       -0.25f
+#define PLAYER_W 0.4f
+#define EYE_H 1.65f
+#define HEAD_MARGIN 0.15f
+#define GAME_FOV 1.4915f
+#define GRAVITY 0.005f
+#define JUMP_FORCE 0.12f
+#define TERM_VEL -0.25f
 
-// УМЕНЬШЕНО ДЛЯ СТАБИЛЬНОСТИ (с 32 до 14)
-#define LOAD_RADIUS     14
-#define WORLD_BUF       (LOAD_RADIUS * 2 + 1)
-#define CHUNK_H         32
+#define LOAD_RADIUS 16
+#define WORLD_BUF (LOAD_RADIUS * 2 + 1)
+#define CHUNK_H 32
 
 #define FACE_XP 0x01
 #define FACE_XN 0x02
@@ -39,52 +38,40 @@
 #define FACE_ZP 0x10
 #define FACE_ZN 0x20
 
-#define RAY_DIST        6.0f
-#define RAY_STEP        0.02f
-#define MAX_EDITS       1024
+#define BLOCK_AIR 0
+#define BLOCK_GRASS 1
+#define BLOCK_WOOD 2
+#define BLOCK_LEAVES 3
 
-#define BLOCK_AIR       0
-#define BLOCK_GRASS     1
-#define BLOCK_WOOD      2
-#define BLOCK_LEAVES    3
-
-#define INV_SLOTS       9
-#define INV_SLOT_SIZE   46.0f
-#define INV_PADDING     4.0f
-#define INV_Y_OFFSET    50.0f
+#define INV_SLOTS 9
+#define INV_SLOT_SIZE 46.0f
+#define INV_PADDING 4.0f
+#define INV_Y_OFFSET 50.0f
 
 #define ANIM_BREAK_FRAMES 15
 #define ANIM_PLACE_FRAMES 12
+#define MAX_EDITS 1024
+#define RAY_DIST 6.0f
+#define RAY_STEP 0.02f
 
-#define STATE_MENU      0
-#define STATE_PLAYING   1
+#define STATE_MENU 0
+#define STATE_PLAYING 1
 
-struct block_edit {
-    int wx, wy, wz;
-    unsigned char val;
-};
+struct block_edit { int wx, wy, wz; unsigned char val; };
 
 struct engine {
     struct android_app* app;
-    EGLDisplay display;
-    EGLSurface surface;
-    EGLContext context;
+    EGLDisplay display; EGLSurface surface; EGLContext context;
     int32_t width, height;
     GLuint program;
-    
     GLuint texGrassTop, texGrassSide, texGrassDown;
     GLuint texLeaves, texTreeSide, texTreeTop;
 
-    float camPos[3];
-    float camRot[2];
-    float velY;
+    float camPos[3], camRot[2], velY;
     float moveDirX, moveDirZ;
     float lastTouchX, lastTouchY;
-
-    bool isMoving;
-    int movePointerId;
-    int lookPointerId;
-    bool onGround;
+    bool isMoving, onGround;
+    int movePointerId, lookPointerId;
 
     GLuint vbo;
     int visibleFaceCount;
@@ -92,7 +79,6 @@ struct engine {
 
     int loadCenterX, loadCenterZ;
     bool worldLoaded;
-
     unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
     unsigned char faces[WORLD_BUF][CHUNK_H][WORLD_BUF];
 
@@ -105,15 +91,9 @@ struct engine {
     float miningProgress;
     int miningX, miningY, miningZ;
 
-    int animBreakTimer;
-    int animPlaceTimer;
+    int animBreakTimer, animPlaceTimer;
     float animBlockX, animBlockY, animBlockZ;
-    bool animActive;
-    bool animIsBreak;
-
+    bool animActive, animIsBreak, joyTouched;
     int gameState;
-    int worldSeed;
-    bool joyTouched;
 };
-
 #endif
