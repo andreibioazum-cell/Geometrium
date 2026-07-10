@@ -10,10 +10,8 @@
 #define JOY_X_OFFSET    130.0f
 #define JOY_Y_OFFSET    130.0f
 #define STICK_RADIUS    32.0f
-
 #define JUMP_BTN_SIZE   80.0f
 #define JUMP_BTN_OFFSET 130.0f
-
 #define ACTION_BTN_SIZE 45.0f
 #define BREAK_BTN_X     80.0f
 #define BREAK_BTN_Y     80.0f
@@ -21,17 +19,16 @@
 #define PLACE_BTN_Y     190.0f
 
 #define PI              3.14159265f
-
 #define PLAYER_W        0.4f
 #define EYE_H           1.65f
 #define HEAD_MARGIN     0.15f
 #define GAME_FOV        1.4915f
-
 #define GRAVITY         0.005f
 #define JUMP_FORCE      0.12f
 #define TERM_VEL       -0.25f
 
-#define LOAD_RADIUS     32
+// УМЕНЬШЕНО ДЛЯ СТАБИЛЬНОСТИ (с 32 до 14)
+#define LOAD_RADIUS     14
 #define WORLD_BUF       (LOAD_RADIUS * 2 + 1)
 #define CHUNK_H         32
 
@@ -74,7 +71,6 @@ struct engine {
     EGLContext context;
     int32_t width, height;
     GLuint program;
-    GLuint invProgram;
     
     GLuint texGrassTop, texGrassSide, texGrassDown;
     GLuint texLeaves, texTreeSide, texTreeTop;
@@ -82,8 +78,6 @@ struct engine {
     float camPos[3];
     float camRot[2];
     float velY;
-
-    float joyX, joyY;
     float moveDirX, moveDirZ;
     float lastTouchX, lastTouchY;
 
@@ -108,7 +102,6 @@ struct engine {
     unsigned char invSlots[INV_SLOTS];
     int selectedSlot;
 
-    // Система добычи
     float miningProgress;
     int miningX, miningY, miningZ;
 
