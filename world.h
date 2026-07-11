@@ -18,7 +18,7 @@ static float noise2d(int x, int z) { return (float)(hash2d(x, z) & 0xFFFF) / 655
 
 static int get_height(int wx, int wz) {
     float val = (noise2d(wx, wz) + noise2d(wx+1, wz)) * 0.5f;
-    return (int)(val * 8.0f) + 6;
+    return (int)(val * 7.0f) + 6;
 }
 
 static void pos_to_block(float rx, float ry, float rz, int* wx, int* wy, int* wz) {
@@ -38,7 +38,7 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
 
 static void try_place_tree(struct engine* eng, int bx, int bz, int h) {
     unsigned int hsh = hash2d(eng->loadCenterX-LOAD_RADIUS+bx, eng->loadCenterZ-LOAD_RADIUS+bz);
-    if ((hsh % 130) == 0 && bx > 3 && bx < WORLD_BUF-4 && bz > 3 && bz < WORLD_BUF-4) {
+    if ((hsh % 140) == 0 && bx > 3 && bx < WORLD_BUF-4 && bz > 3 && bz < WORLD_BUF-4) {
         int treeH = 4 + (hsh % 3);
         for (int i = 0; i < treeH; i++) eng->blocks[bx][h+i][bz] = BLOCK_WOOD;
         for (int lx = -2; lx <= 2; lx++)
@@ -84,6 +84,7 @@ static void update_faces(struct engine* eng) {
                 unsigned char b = eng->blocks[x][y][z];
                 if (!b) { eng->faces[x][y][z] = 0; continue; }
                 unsigned char f = 0;
+                // Листва НЕ скрывает грани
                 #define IS_OP(bx,by,bz) (bx>=0 && bx<WORLD_BUF && by>=0 && by<CHUNK_H && bz>=0 && bz<WORLD_BUF && eng->blocks[bx][by][bz] != 0 && eng->blocks[bx][by][bz] != BLOCK_LEAVES)
                 if (!IS_OP(x+1,y,z)) f|=FACE_XP; if (!IS_OP(x-1,y,z)) f|=FACE_XN;
                 if (!IS_OP(x,y+1,z)) f|=FACE_YP; if (!IS_OP(x,y-1,z)) f|=FACE_YN;
@@ -94,7 +95,7 @@ static void update_faces(struct engine* eng) {
 
 static void update_world(struct engine* eng) {
     int px = (int)floorf(eng->camPos[0]), pz = (int)floorf(-eng->camPos[2]);
-    if (!eng->worldLoaded || (px-eng->loadCenterX)*(px-eng->loadCenterX) + (pz-eng->loadCenterZ)*(pz-eng->loadCenterZ) > 64)
+    if (!eng->worldLoaded || (px-eng->loadCenterX)*(px-eng->loadCenterX) + (pz-eng->loadCenterZ)*(pz-eng->loadCenterZ) > 81)
         load_blocks_around(eng, px, pz);
 }
 
@@ -120,7 +121,7 @@ static void break_block(struct engine* eng) {
     if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
         if (hy <= 0) return;
         if (eng->miningX != hx || eng->miningY != hy || eng->miningZ != hz) { eng->miningProgress = 0; eng->miningX = hx; eng->miningY = hy; eng->miningZ = hz; }
-        eng->miningProgress += 0.08f; 
+        eng->miningProgress += 0.15f; 
         if (eng->miningProgress >= 1.0f) {
             unsigned char type = world_block_at(eng, hx, hy, hz);
             start_block_anim(eng, hx, hy, hz, type, true);
