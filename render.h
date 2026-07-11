@@ -89,8 +89,8 @@ static void render_anim(struct engine* eng) {
     if (eng->animBreakTimer<=0 && eng->animPlaceTimer<=0) eng->animActive=false;
     float bx=eng->animBlockX, by=eng->animBlockY, bz=eng->animBlockZ, hs=s*0.5f, t=(float)eng->animBlockType;
     float ab[324]; int ai=0;
-    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1,1,0,0,t); p_v(ab,&ai,bx+hs,by-hs,bz+hs,1,1,1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0,1,0,0,t);
-    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1,1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0,1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz-hs,0,0,1,0,0,t);
+    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1, 1,0,0,t); p_v(ab,&ai,bx+hs,by-hs,bz+hs,1,1, 1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0, 1,0,0,t);
+    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1, 1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0, 1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz-hs,0,0, 1,0,0,t);
     glBindBuffer(GL_ARRAY_BUFFER, 0); glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,36,ab); glEnableVertexAttribArray(0);
     glVertexAttribPointer(3,1,GL_FLOAT,GL_FALSE,36,(void*)32); glEnableVertexAttribArray(3);
     glDrawArrays(GL_TRIANGLES,0,6);
