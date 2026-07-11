@@ -88,6 +88,7 @@ struct engine {
     unsigned char invSlots[INV_SLOTS];
     int selectedSlot;
 
+    bool isBreaking, isPlacing;
     float miningProgress;
     int miningX, miningY, miningZ;
 
