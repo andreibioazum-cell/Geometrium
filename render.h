@@ -52,7 +52,9 @@ void init_textures(struct engine* eng) {
 }
 
 static void p_v(float* b, int* i, float x, float y, float z, float u, float v, float nx, float ny, float nz, float t) {
-    float d[] = {x,y,z, u,v, nx,ny,nz, t}; memcpy(&b[*i], d, sizeof(d)); *i += 9;
+    float d[] = {x,y,z, u,v, nx,ny,nz, t};
+    memcpy(&b[*i], d, sizeof(d));
+    *i += 9;
 }
 
 static void rebuild_vbo(struct engine* eng) {
@@ -65,17 +67,18 @@ static void rebuild_vbo(struct engine* eng) {
     eng->visibleFaceCount = fc;
     if (fc == 0) return;
     float* buf = (float*)malloc(fc * 6 * 9 * sizeof(float));
+    if(!buf) return;
     int idx = 0, ox = eng->loadCenterX - LOAD_RADIUS, oz = eng->loadCenterZ - LOAD_RADIUS;
     for (int x=0; x<WORLD_BUF; x++) for (int y=0; y<CHUNK_H; y++) for (int z=0; z<WORLD_BUF; z++) {
         unsigned char f = eng->faces[x][y][z]; if(!f) continue;
         float t = (float)eng->blocks[x][y][z], bx=(float)(ox+x), by=(float)y, bz=(float)(-(oz+z));
         float x0=bx-.5f,x1=bx+.5f,y0=by-.5f,y1=by+.5f,z0=bz-.5f,z1=bz+.5f;
-        if(f&FACE_XP){ p_v(buf,&idx,x1,y0,z0,0,1,1,0,0,t); p_v(buf,&idx,x1,y0,z1,1,1,1,0,0,t); p_v(buf,&idx,x1,y1,z1,1,0,1,0,0,t); p_v(buf,&idx,x1,y0,z0,0,1,1,0,0,t); p_v(buf,&idx,x1,y1,z1,1,0,1,0,0,t); p_v(buf,&idx,x1,y1,z0,0,0,1,0,0,t); }
+        if(f&FACE_XP){ p_v(buf,&idx,x1,y0,z0,0,1, 1,0,0,t); p_v(buf,&idx,x1,y0,z1,1,1, 1,0,0,t); p_v(buf,&idx,x1,y1,z1,1,0, 1,0,0,t); p_v(buf,&idx,x1,y0,z0,0,1, 1,0,0,t); p_v(buf,&idx,x1,y1,z1,1,0, 1,0,0,t); p_v(buf,&idx,x1,y1,z0,0,0, 1,0,0,t); }
         if(f&FACE_XN){ p_v(buf,&idx,x0,y0,z1,0,1,-1,0,0,t); p_v(buf,&idx,x0,y0,z0,1,1,-1,0,0,t); p_v(buf,&idx,x0,y1,z0,1,0,-1,0,0,t); p_v(buf,&idx,x0,y0,z1,0,1,-1,0,0,t); p_v(buf,&idx,x0,y1,z0,1,0,-1,0,0,t); p_v(buf,&idx,x0,y1,z1,0,0,-1,0,0,t); }
-        if(f&FACE_YP){ p_v(buf,&idx,x0,y1,z1,0,0,0,1,0,t); p_v(buf,&idx,x1,y1,z1,1,0,0,1,0,t); p_v(buf,&idx,x1,y1,z0,1,1,0,1,0,t); p_v(buf,&idx,x0,y1,z1,0,0,0,1,0,t); p_v(buf,&idx,x1,y1,z0,1,1,0,1,0,t); p_v(buf,&idx,x0,y1,z0,0,1,0,1,0,t); }
-        if(f&FACE_YN){ p_v(buf,&idx,x0,y0,z0,0,0,0,-1,0,t); p_v(buf,&idx,x1,y0,z0,1,0,0,-1,0,t); p_v(buf,&idx,x1,y0,z1,1,1,0,-1,0,t); p_v(buf,&idx,x0,y0,z0,0,0,0,-1,0,t); p_v(buf,&idx,x1,y0,z1,1,1,0,-1,0,t); p_v(buf,&idx,x0,y0,z1,0,1,0,-1,0,t); }
-        if(f&FACE_ZP){ p_v(buf,&idx,x1,y0,z0,0,1,0,0,-1,t); p_v(buf,&idx,x0,y0,z0,1,1,0,0,-1,t); p_v(buf,&idx,x0,y1,z0,1,0,0,0,-1,t); p_v(buf,&idx,x1,y0,z0,0,1,0,0,-1,t); p_v(buf,&idx,x0,y1,z0,1,0,0,0,-1,t); p_v(buf,&idx,x1,y1,z0,0,0,0,0,-1,t); }
-        if(f&FACE_ZN){ p_v(buf,&idx,x0,y0,z1,0,1,0,0,1,t); p_v(buf,&idx,x1,y0,z1,1,1,0,0,1,t); p_v(buf,&idx,x1,y1,z1,1,0,0,0,1,t); p_v(buf,&idx,x0,y0,z1,0,1,0,0,1,t); p_v(buf,&idx,x1,y1,z1,1,0,0,0,1,t); p_v(buf,&idx,x0,y1,z1,0,0,0,1,t); }
+        if(f&FACE_YP){ p_v(buf,&idx,x0,y1,z1,0,0, 0,1,0,t); p_v(buf,&idx,x1,y1,z1,1,0, 0,1,0,t); p_v(buf,&idx,x1,y1,z0,1,1, 0,1,0,t); p_v(buf,&idx,x0,y1,z1,0,0, 0,1,0,t); p_v(buf,&idx,x1,y1,z0,1,1, 0,1,0,t); p_v(buf,&idx,x0,y1,z0,0,1, 0,1,0,t); }
+        if(f&FACE_YN){ p_v(buf,&idx,x0,y0,z0,0,0, 0,-1,0,t); p_v(buf,&idx,x1,y0,z0,1,0, 0,-1,0,t); p_v(buf,&idx,x1,y0,z1,1,1, 0,-1,0,t); p_v(buf,&idx,x0,y0,z0,0,0, 0,-1,0,t); p_v(buf,&idx,x1,y0,z1,1,1, 0,-1,0,t); p_v(buf,&idx,x0,y0,z1,0,1, 0,-1,0,t); }
+        if(f&FACE_ZP){ p_v(buf,&idx,x1,y0,z0,0,1, 0,0,-1,t); p_v(buf,&idx,x0,y0,z0,1,1, 0,0,-1,t); p_v(buf,&idx,x0,y1,z0,1,0, 0,0,-1,t); p_v(buf,&idx,x1,y0,z0,0,1, 0,0,-1,t); p_v(buf,&idx,x0,y1,z0,1,0, 0,0,-1,t); p_v(buf,&idx,x1,y1,z0,0,0, 0,0,-1,t); }
+        if(f&FACE_ZN){ p_v(buf,&idx,x0,y0,z1,0,1, 0,0,1,t); p_v(buf,&idx,x1,y0,z1,1,1, 0,0,1,t); p_v(buf,&idx,x1,y1,z1,1,0, 0,0,1,t); p_v(buf,&idx,x0,y0,z1,0,1, 0,0,1,t); p_v(buf,&idx,x1,y1,z1,1,0, 0,0,1,t); p_v(buf,&idx,x0,y1,z1,0,0, 0,0,1,t); }
     }
     if (!eng->vbo) glGenBuffers(1, &eng->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, eng->vbo); glBufferData(GL_ARRAY_BUFFER, fc*54*4, buf, GL_STATIC_DRAW);
@@ -98,6 +101,7 @@ static void render_anim(struct engine* eng) {
 void render_world(struct engine* eng) {
     if (eng->meshDirty) rebuild_vbo(eng);
     glEnable(GL_DEPTH_TEST); glUseProgram(eng->program);
+    glUniform3f(glGetUniformLocation(eng->program, "uCP"), eng->camPos[0], eng->camPos[1], eng->camPos[2]);
     glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, eng->texGrassTop); glUniform1i(glGetUniformLocation(eng->program, "uT1"), 0);
     glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, eng->texGrassSide); glUniform1i(glGetUniformLocation(eng->program, "uT2"), 1);
     glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, eng->texGrassDown); glUniform1i(glGetUniformLocation(eng->program, "uT3"), 2);
@@ -117,6 +121,7 @@ void render_world(struct engine* eng) {
         glDrawArrays(GL_TRIANGLES, 0, eng->visibleFaceCount * 6);
     }
     render_anim(eng);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void init_ui_shader(void) {
