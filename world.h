@@ -84,14 +84,10 @@ static void update_faces(struct engine* eng) {
                 unsigned char b = eng->blocks[x][y][z];
                 if (!b) { eng->faces[x][y][z] = 0; continue; }
                 unsigned char f = 0;
-                // Листва не скрывает грани других блоков
-                #define IS_OPAQUE(bx,by,bz) (bx>=0 && bx<WORLD_BUF && by>=0 && by<CHUNK_H && bz>=0 && bz<WORLD_BUF && eng->blocks[bx][by][bz] != 0 && eng->blocks[bx][by][bz] != BLOCK_LEAVES)
-                if (!IS_OPAQUE(x+1,y,z)) f|=FACE_XP;
-                if (!IS_OPAQUE(x-1,y,z)) f|=FACE_XN;
-                if (!IS_OPAQUE(x,y+1,z)) f|=FACE_YP;
-                if (!IS_OPAQUE(x,y-1,z)) f|=FACE_YN;
-                if (!IS_OPAQUE(x,y,z+1)) f|=FACE_ZP;
-                if (!IS_OPAQUE(x,y,z-1)) f|=FACE_ZN;
+                #define IS_OP(bx,by,bz) (bx>=0 && bx<WORLD_BUF && by>=0 && by<CHUNK_H && bz>=0 && bz<WORLD_BUF && eng->blocks[bx][by][bz] != 0 && eng->blocks[bx][by][bz] != BLOCK_LEAVES)
+                if (!IS_OP(x+1,y,z)) f|=FACE_XP; if (!IS_OP(x-1,y,z)) f|=FACE_XN;
+                if (!IS_OP(x,y+1,z)) f|=FACE_YP; if (!IS_OP(x,y-1,z)) f|=FACE_YN;
+                if (!IS_OP(x,y,z+1)) f|=FACE_ZP; if (!IS_OP(x,y,z-1)) f|=FACE_ZN;
                 eng->faces[x][y][z] = f;
             }
 }
@@ -104,8 +100,7 @@ static void update_world(struct engine* eng) {
 
 static bool raycast(struct engine* eng, int* hX, int* hY, int* hZ, int* pX, int* pY, int* pZ) {
     float view[16]; mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
-    float dx = -view[2], dy = -view[6], dz = -view[10];
-    *pX=-9999;
+    float dx = -view[2], dy = -view[6], dz = -view[10]; *pX=-9999;
     for (float t=0.1f; t<RAY_DIST; t+=RAY_STEP) {
         int wx,wy,wz; pos_to_block(eng->camPos[0]+dx*t, eng->camPos[1]+dy*t, eng->camPos[2]+dz*t, &wx,&wy,&wz);
         if (world_block_at(eng,wx,wy,wz)>0) { *hX=wx;*hY=wy;*hZ=wz; return true; }
@@ -125,7 +120,7 @@ static void break_block(struct engine* eng) {
     if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
         if (hy <= 0) return;
         if (eng->miningX != hx || eng->miningY != hy || eng->miningZ != hz) { eng->miningProgress = 0; eng->miningX = hx; eng->miningY = hy; eng->miningZ = hz; }
-        eng->miningProgress += 0.12f; // Быстрое ломание
+        eng->miningProgress += 0.08f; 
         if (eng->miningProgress >= 1.0f) {
             unsigned char type = world_block_at(eng, hx, hy, hz);
             start_block_anim(eng, hx, hy, hz, type, true);
