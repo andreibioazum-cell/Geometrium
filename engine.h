@@ -21,13 +21,12 @@
 
 #define PLAYER_W 0.4f
 #define EYE_H 1.65f
-#define HEAD_MARGIN 0.15f
 #define GAME_FOV 1.4915f
 #define GRAVITY 0.005f
 #define JUMP_FORCE 0.12f
 #define TERM_VEL -0.25f
 
-#define LOAD_RADIUS 16
+#define LOAD_RADIUS 14
 #define WORLD_BUF (LOAD_RADIUS * 2 + 1)
 #define CHUNK_H 32
 
@@ -52,7 +51,7 @@
 #define ANIM_PLACE_FRAMES 12
 #define MAX_EDITS 1024
 #define RAY_DIST 6.0f
-#define RAY_STEP 0.02f
+#define RAY_STEP 0.05f
 
 #define STATE_MENU 0
 #define STATE_PLAYING 1
@@ -94,7 +93,7 @@ struct engine {
 
     int animBreakTimer, animPlaceTimer;
     float animBlockX, animBlockY, animBlockZ;
-    unsigned char animBlockType; // <--- ДОБАВЛЕНО
+    unsigned char animBlockType;
     bool animActive, animIsBreak;
     int gameState;
 };
