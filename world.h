@@ -17,9 +17,8 @@ static unsigned int hash2d(int x, int z) {
 static float noise2d(int x, int z) { return (float)(hash2d(x, z) & 0xFFFF) / 65535.0f; }
 
 static int get_height(int wx, int wz) {
-    float val = (noise2d(wx, wz) + noise2d(wx+1, wz) + noise2d(wx, wz+1)) * 0.33f;
-    int h = (int)(val * 10.0f) + 8;
-    return h;
+    float val = (noise2d(wx, wz) + noise2d(wx+1, wz)) * 0.5f;
+    return (int)(val * 8.0f) + 6;
 }
 
 static void pos_to_block(float rx, float ry, float rz, int* wx, int* wy, int* wz) {
@@ -39,7 +38,7 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
 
 static void try_place_tree(struct engine* eng, int bx, int bz, int h) {
     unsigned int hsh = hash2d(eng->loadCenterX-LOAD_RADIUS+bx, eng->loadCenterZ-LOAD_RADIUS+bz);
-    if ((hsh % 150) == 0 && bx > 3 && bx < WORLD_BUF-4 && bz > 3 && bz < WORLD_BUF-4) {
+    if ((hsh % 130) == 0 && bx > 3 && bx < WORLD_BUF-4 && bz > 3 && bz < WORLD_BUF-4) {
         int treeH = 4 + (hsh % 3);
         for (int i = 0; i < treeH; i++) eng->blocks[bx][h+i][bz] = BLOCK_WOOD;
         for (int lx = -2; lx <= 2; lx++)
@@ -82,14 +81,17 @@ static void update_faces(struct engine* eng) {
     for (int x = 0; x < WORLD_BUF; x++)
         for (int y = 0; y < CHUNK_H; y++)
             for (int z = 0; z < WORLD_BUF; z++) {
-                if (!eng->blocks[x][y][z]) { eng->faces[x][y][z] = 0; continue; }
+                unsigned char b = eng->blocks[x][y][z];
+                if (!b) { eng->faces[x][y][z] = 0; continue; }
                 unsigned char f = 0;
-                if (x==WORLD_BUF-1 || !eng->blocks[x+1][y][z]) f|=FACE_XP;
-                if (x==0 || !eng->blocks[x-1][y][z]) f|=FACE_XN;
-                if (y==CHUNK_H-1 || !eng->blocks[x][y+1][z]) f|=FACE_YP;
-                if (y==0 || !eng->blocks[x][y-1][z]) f|=FACE_YN;
-                if (z==WORLD_BUF-1 || !eng->blocks[x][y][z+1]) f|=FACE_ZP;
-                if (z==0 || !eng->blocks[x][y][z-1]) f|=FACE_ZN;
+                // Листва не скрывает грани других блоков
+                #define IS_OPAQUE(bx,by,bz) (bx>=0 && bx<WORLD_BUF && by>=0 && by<CHUNK_H && bz>=0 && bz<WORLD_BUF && eng->blocks[bx][by][bz] != 0 && eng->blocks[bx][by][bz] != BLOCK_LEAVES)
+                if (!IS_OPAQUE(x+1,y,z)) f|=FACE_XP;
+                if (!IS_OPAQUE(x-1,y,z)) f|=FACE_XN;
+                if (!IS_OPAQUE(x,y+1,z)) f|=FACE_YP;
+                if (!IS_OPAQUE(x,y-1,z)) f|=FACE_YN;
+                if (!IS_OPAQUE(x,y,z+1)) f|=FACE_ZP;
+                if (!IS_OPAQUE(x,y,z-1)) f|=FACE_ZN;
                 eng->faces[x][y][z] = f;
             }
 }
@@ -112,9 +114,9 @@ static bool raycast(struct engine* eng, int* hX, int* hY, int* hZ, int* pX, int*
     return false;
 }
 
-static void start_block_anim(struct engine* eng, int wx, int wy, int wz, bool breaking) {
+static void start_block_anim(struct engine* eng, int wx, int wy, int wz, unsigned char type, bool breaking) {
     eng->animActive = true; eng->animBlockX = (float)wx; eng->animBlockY = (float)wy; eng->animBlockZ = -(float)wz;
-    eng->animIsBreak = breaking;
+    eng->animBlockType = type; eng->animIsBreak = breaking;
     if (breaking) eng->animBreakTimer = ANIM_BREAK_FRAMES; else eng->animPlaceTimer = ANIM_PLACE_FRAMES;
 }
 
@@ -123,10 +125,10 @@ static void break_block(struct engine* eng) {
     if (raycast(eng, &hx, &hy, &hz, &px, &py, &pz)) {
         if (hy <= 0) return;
         if (eng->miningX != hx || eng->miningY != hy || eng->miningZ != hz) { eng->miningProgress = 0; eng->miningX = hx; eng->miningY = hy; eng->miningZ = hz; }
-        eng->miningProgress += 0.05f;
+        eng->miningProgress += 0.12f; // Быстрое ломание
         if (eng->miningProgress >= 1.0f) {
             unsigned char type = world_block_at(eng, hx, hy, hz);
-            start_block_anim(eng, hx, hy, hz, true);
+            start_block_anim(eng, hx, hy, hz, type, true);
             world_set_block(eng, hx, hy, hz, BLOCK_AIR);
             for(int i=0; i<INV_SLOTS; i++) if(eng->invSlots[i]==0){ eng->invSlots[i]=type; break; }
             eng->miningProgress = 0;
@@ -139,7 +141,7 @@ static void place_block(struct engine* eng) {
     if (!raycast(eng,&hx,&hy,&hz,&px,&py,&pz) || px==-9999) return;
     unsigned char type = eng->invSlots[eng->selectedSlot];
     if (type == BLOCK_AIR) return;
-    start_block_anim(eng, px, py, pz, false);
+    start_block_anim(eng, px, py, pz, type, false);
     world_set_block(eng,px,py,pz,type);
     eng->invSlots[eng->selectedSlot] = BLOCK_AIR;
 }
