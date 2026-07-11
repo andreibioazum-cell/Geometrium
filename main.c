@@ -1,71 +1,101 @@
+#ifndef ENGINE_H
+#define ENGINE_H
+
 #include <android_native_app_glue.h>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
-#include <android/log.h>
-#include <stdlib.h>
-#include <time.h>
-#include <stdio.h>
+#include <stdbool.h>
 
-#include "engine.h"
-#include "world.h"
-#include "math_utils.h"
-#include "physics.h"
-#include "input.h"
-#include "render.h"
+#define PI 3.14159265f
+#define JOY_RADIUS 80.0f
+#define JOY_X_OFFSET 130.0f
+#define JOY_Y_OFFSET 130.0f
+#define STICK_RADIUS 32.0f
+#define JUMP_BTN_SIZE 80.0f
+#define JUMP_BTN_OFFSET 130.0f
+#define ACTION_BTN_SIZE 45.0f
+#define BREAK_BTN_X 80.0f
+#define BREAK_BTN_Y 80.0f
+#define PLACE_BTN_X 80.0f
+#define PLACE_BTN_Y 190.0f
 
-unsigned int game_seed = 0;
-bool fatal_error = false;
+#define PLAYER_W 0.4f
+#define EYE_H 1.65f
+#define HEAD_MARGIN 0.15f
+#define GAME_FOV 1.4915f
+#define GRAVITY 0.005f
+#define JUMP_FORCE 0.12f
+#define TERM_VEL -0.25f
 
-static void engine_draw_frame(struct engine* eng) {
-    if (!eng->display || !eng->surface) return;
-    if (fatal_error) { glClearColor(1,0,0,1); glClear(GL_COLOR_BUFFER_BIT); eglSwapBuffers(eng->display, eng->surface); return; }
-    eglQuerySurface(eng->display, eng->surface, EGL_WIDTH, &eng->width);
-    eglQuerySurface(eng->display, eng->surface, EGL_HEIGHT, &eng->height);
-    glViewport(0, 0, eng->width, eng->height);
-    if (eng->gameState == STATE_MENU) {
-        glClearColor(0.2f, 0.6f, 0.3f, 1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        draw_menu(eng); eglSwapBuffers(eng->display, eng->surface); return;
-    }
-    update_world(eng); apply_physics(eng);
-    if(eng->isBreaking) break_block(eng);
-    glClearColor(0.53f, 0.81f, 0.98f, 1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    render_world(eng); draw_ui(eng);
-    eglSwapBuffers(eng->display, eng->surface);
-}
+#define LOAD_RADIUS 16
+#define WORLD_BUF (LOAD_RADIUS * 2 + 1)
+#define CHUNK_H 32
 
-static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
-    struct engine* eng = (struct engine*)app->userData;
-    if (cmd == APP_CMD_INIT_WINDOW) {
-        eng->display = eglGetDisplay(EGL_DEFAULT_DISPLAY); eglInitialize(eng->display, NULL, NULL);
-        EGLConfig config; EGLint n; EGLint att[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT, EGL_DEPTH_SIZE, 16, EGL_NONE };
-        eglChooseConfig(eng->display, att, &config, 1, &n);
-        eng->surface = eglCreateWindowSurface(eng->display, config, app->window, NULL);
-        eng->context = eglCreateContext(eng->display, config, NULL, (EGLint[]){EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE});
-        eglMakeCurrent(eng->display, eng->surface, eng->surface, eng->context);
+#define FACE_XP 0x01
+#define FACE_XN 0x02
+#define FACE_YP 0x04
+#define FACE_YN 0x08
+#define FACE_ZP 0x10
+#define FACE_ZN 0x20
 
-        const char* vS = "attribute vec3 pos; attribute vec2 uv; attribute vec3 norm; attribute float type; varying vec2 vUV; varying float vL; varying float vT; varying float vNY; uniform mat4 m; void main(){ gl_Position=m*vec4(pos,1.0); vUV=uv; vT=type; vNY=norm.y; vL=clamp(dot(norm, vec3(0.4,1.0,0.3)), 0.4, 1.0); }";
-        const char* fS = "precision mediump float; varying vec2 vUV; varying float vL; varying float vT; varying float vNY; uniform sampler2D uT1, uT2, uT3, uT4, uT5, uT6; void main(){ vec4 c; if(vT > 2.5){ c=texture2D(uT4, vUV); if(c.a < 0.1) discard; } else if(vT > 1.5){ if(vNY>0.5 || vNY<-0.5) c=texture2D(uT6, vUV); else c=texture2D(uT5, vUV); } else { if(vNY>0.5) c=texture2D(uT1, vUV); else if(vNY<-0.5) c=texture2D(uT3, vUV); else c=texture2D(uT2, vUV); } gl_FragColor=vec4(c.rgb*vL, c.a); }";
+#define BLOCK_AIR 0
+#define BLOCK_GRASS 1
+#define BLOCK_WOOD 2
+#define BLOCK_LEAVES 3
 
-        GLuint vs = glCreateShader(GL_VERTEX_SHADER); glShaderSource(vs, 1, &vS, NULL); glCompileShader(vs);
-        GLuint fs = glCreateShader(GL_FRAGMENT_SHADER); glShaderSource(fs, 1, &fS, NULL); glCompileShader(fs);
-        eng->program = glCreateProgram(); glAttachShader(eng->program, vs); glAttachShader(eng->program, fs);
-        glBindAttribLocation(eng->program, 0, "pos"); glBindAttribLocation(eng->program, 1, "uv");
-        glBindAttribLocation(eng->program, 2, "norm"); glBindAttribLocation(eng->program, 3, "type");
-        glLinkProgram(eng->program);
-        init_textures(eng); init_ui_shader(); game_seed = (unsigned int)time(NULL);
-    }
-}
+#define INV_SLOTS 9
+#define INV_SLOT_SIZE 46.0f
+#define INV_PADDING 4.0f
+#define INV_Y_OFFSET 50.0f
 
-void android_main(struct android_app* state) {
-    struct engine* eng = (struct engine*)malloc(sizeof(struct engine));
-    memset(eng, 0, sizeof(struct engine));
-    eng->app = state; eng->gameState = STATE_MENU;
-    eng->invSlots[0]=BLOCK_GRASS; eng->invSlots[1]=BLOCK_WOOD; eng->invSlots[2]=BLOCK_LEAVES;
-    eng->camPos[1]=20.0f; state->userData = eng; state->onAppCmd = engine_handle_cmd; state->onInputEvent = engine_handle_input;
-    while (1) {
-        int ev; struct android_poll_source* s;
-        while (ALooper_pollOnce(0, NULL, &ev, (void**)&s) >= 0) { if (s) s->process(state, s); if (state->destroyRequested) { free(eng); return; } }
-        engine_draw_frame(eng);
-    }
-}
+#define ANIM_BREAK_FRAMES 15
+#define ANIM_PLACE_FRAMES 12
+#define MAX_EDITS 1024
+#define RAY_DIST 6.0f
+#define RAY_STEP 0.02f
+
+#define STATE_MENU 0
+#define STATE_PLAYING 1
+
+struct block_edit { int wx, wy, wz; unsigned char val; };
+
+struct engine {
+    struct android_app* app;
+    EGLDisplay display; EGLSurface surface; EGLContext context;
+    int32_t width, height;
+    GLuint program;
+    GLuint texGrassTop, texGrassSide, texGrassDown;
+    GLuint texLeaves, texTreeSide, texTreeTop;
+
+    float camPos[3], camRot[2], velY;
+    float moveDirX, moveDirZ;
+    float lastTouchX, lastTouchY;
+    bool isMoving, onGround;
+    int movePointerId, lookPointerId;
+
+    GLuint vbo;
+    int visibleFaceCount;
+    bool meshDirty;
+
+    int loadCenterX, loadCenterZ;
+    bool worldLoaded;
+    unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
+    unsigned char faces[WORLD_BUF][CHUNK_H][WORLD_BUF];
+
+    struct block_edit edits[MAX_EDITS];
+    int editCount;
+
+    unsigned char invSlots[INV_SLOTS];
+    int selectedSlot;
+
+    bool isBreaking;
+    float miningProgress;
+    int miningX, miningY, miningZ;
+
+    int animBreakTimer, animPlaceTimer;
+    float animBlockX, animBlockY, animBlockZ;
+    unsigned char animBlockType;
+    bool animActive, animIsBreak;
+    int gameState;
+};
+#endif
