@@ -1,4 +1,4 @@
- #ifndef RENDER_H
+#ifndef RENDER_H
 #define RENDER_H
 
 #include <GLES2/gl2.h>
@@ -85,13 +85,14 @@ static void rebuild_vbo(struct engine* eng) {
 static void render_anim(struct engine* eng) {
     if (!eng->animActive) return;
     float s = (eng->animIsBreak) ? (float)eng->animBreakTimer/ANIM_BREAK_FRAMES : 1.0f - (float)eng->animPlaceTimer/ANIM_PLACE_FRAMES;
-    s *= s; if (eng->animBreakTimer > 0) eng->animBreakTimer--; if (eng->animPlaceTimer > 0) eng->animPlaceTimer--;
+    s = s*s; if (eng->animBreakTimer > 0) eng->animBreakTimer--; if (eng->animPlaceTimer > 0) eng->animPlaceTimer--;
     if (eng->animBreakTimer<=0 && eng->animPlaceTimer<=0) eng->animActive=false;
-    float bx=eng->animBlockX, by=eng->animBlockY, bz=eng->animBlockZ, hs=s*0.5f;
+    float bx=eng->animBlockX, by=eng->animBlockY, bz=eng->animBlockZ, hs=s*0.5f, t=(float)eng->animBlockType;
     float ab[324]; int ai=0;
-    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1,1,0,0,1); p_v(ab,&ai,bx+hs,by-hs,bz+hs,1,1,1,0,0,1); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0,1,0,0,1);
-    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1,1,0,0,1); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0,1,0,0,1); p_v(ab,&ai,bx+hs,by+hs,bz-hs,0,0,1,0,0,1);
+    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1,1,0,0,t); p_v(ab,&ai,bx+hs,by-hs,bz+hs,1,1,1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0,1,0,0,t);
+    p_v(ab,&ai,bx+hs,by-hs,bz-hs,0,1,1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz+hs,1,0,1,0,0,t); p_v(ab,&ai,bx+hs,by+hs,bz-hs,0,0,1,0,0,t);
     glBindBuffer(GL_ARRAY_BUFFER, 0); glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,36,ab); glEnableVertexAttribArray(0);
+    glVertexAttribPointer(3,1,GL_FLOAT,GL_FALSE,36,(void*)32); glEnableVertexAttribArray(3);
     glDrawArrays(GL_TRIANGLES,0,6);
 }
 
@@ -145,7 +146,7 @@ static void draw_ring(float cx, float cy, float r, float t, int sw, int sh, floa
 }
 
 static void draw_circle(float cx, float cy, float r, int sw, int sh, float cr, float cg, float cb, float ca) {
-    float nx=(cx/sw)*2-1, ny=1-(cy/sh)*2, rx=(r/sw)*2, ry=(r/sh)*2;
+    float nx=(cx/sw)*2-1, ny=1-(cy/sh)*2, rx=(r/sw)*2, ry=(r/h)*2;
     float v[52]; v[0]=nx; v[1]=ny; for(int i=0;i<=24;i++){ float a=i/24.0f*2*PI; v[(i+1)*2]=nx+cosf(a)*rx; v[(i+1)*2+1]=ny+sinf(a)*ry; }
     glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca); glUniform1i(glGetUniformLocation(uiProg,"useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLE_FAN,0,26);
@@ -164,12 +165,12 @@ static void draw_t(float cx, float cy, float hw, float hh, int sw, int sh, GLuin
 void draw_ui(struct engine* eng) {
     int sw=eng->width, sh=eng->height;
     glDisable(GL_DEPTH_TEST); glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    draw_r(sw/2, sh/2, 10, 1, sw, sh, 1,1,1,1); draw_r(sw/2, sh/2, 1, 10, sw, sh, 1,1,1,1);
+    draw_r(sw/2, sh/2, 12, 1.5f, sw, sh, 1,1,1,0.8f); draw_r(sw/2, sh/2, 1.5f, 12, sw, sh, 1,1,1,0.8f);
     draw_ring(JOY_X_OFFSET, sh-JOY_Y_OFFSET, JOY_RADIUS, 4, sw, sh, 0,0,0,0.6f);
     draw_circle(JOY_X_OFFSET+eng->moveDirX*JOY_RADIUS*0.6f, sh-JOY_Y_OFFSET+eng->moveDirZ*JOY_RADIUS*0.6f, STICK_RADIUS, sw, sh, 0,0,0,0.8f);
     draw_ring(sw-JUMP_BTN_OFFSET, sh-JUMP_BTN_OFFSET, JUMP_BTN_SIZE, 4, sw, sh, 0,0,0,0.6f);
-    float nx=(sw-JUMP_BTN_OFFSET)/sw*2-1, ny=1-(sh-JUMP_BTN_OFFSET)/sh*2, as=20.0f/sw;
-    float arrow[]={nx,ny+as, nx-as,ny-as/2, nx+as,ny-as/2};
+    float nx=(sw-JUMP_BTN_OFFSET)/sw*2-1, ny=1-(sh-JUMP_BTN_OFFSET)/sh*2, asx=20.0f/sw, asy=20.0f/sh;
+    float arrow[]={nx,ny+asy, nx-asx,ny-asy/2, nx+asx,ny-asy/2};
     glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), 0,0,0,1); glUniform1i(glGetUniformLocation(uiProg,"useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLES,0,3);
     draw_ring(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,0.6f);
