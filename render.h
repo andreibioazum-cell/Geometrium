@@ -99,6 +99,7 @@ static void render_anim(struct engine* eng) {
 void render_world(struct engine* eng) {
     if (eng->meshDirty) rebuild_vbo(eng);
     glEnable(GL_DEPTH_TEST); glUseProgram(eng->program);
+    glUniform3f(glGetUniformLocation(eng->program, "uCP"), eng->camPos[0], eng->camPos[1], eng->camPos[2]);
     glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, eng->texGrassTop); glUniform1i(glGetUniformLocation(eng->program, "uT1"), 0);
     glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, eng->texGrassSide); glUniform1i(glGetUniformLocation(eng->program, "uT2"), 1);
     glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, eng->texGrassDown); glUniform1i(glGetUniformLocation(eng->program, "uT3"), 2);
@@ -146,7 +147,7 @@ static void draw_ring(float cx, float cy, float r, float t, int sw, int sh, floa
 }
 
 static void draw_circle(float cx, float cy, float r, int sw, int sh, float cr, float cg, float cb, float ca) {
-    float nx=(cx/sw)*2-1, ny=1-(cy/sh)*2, rx=(r/sw)*2, ry=(r/h)*2;
+    float nx=(cx/sw)*2-1, ny=1-(cy/sh)*2, rx=(r/sw)*2, ry=(r/sh)*2;
     float v[52]; v[0]=nx; v[1]=ny; for(int i=0;i<=24;i++){ float a=i/24.0f*2*PI; v[(i+1)*2]=nx+cosf(a)*rx; v[(i+1)*2+1]=ny+sinf(a)*ry; }
     glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca); glUniform1i(glGetUniformLocation(uiProg,"useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLE_FAN,0,26);
@@ -169,8 +170,8 @@ void draw_ui(struct engine* eng) {
     draw_ring(JOY_X_OFFSET, sh-JOY_Y_OFFSET, JOY_RADIUS, 4, sw, sh, 0,0,0,0.6f);
     draw_circle(JOY_X_OFFSET+eng->moveDirX*JOY_RADIUS*0.6f, sh-JOY_Y_OFFSET+eng->moveDirZ*JOY_RADIUS*0.6f, STICK_RADIUS, sw, sh, 0,0,0,0.8f);
     draw_ring(sw-JUMP_BTN_OFFSET, sh-JUMP_BTN_OFFSET, JUMP_BTN_SIZE, 4, sw, sh, 0,0,0,0.6f);
-    float nx=(sw-JUMP_BTN_OFFSET)/sw*2-1, ny=1-(sh-JUMP_BTN_OFFSET)/sh*2, asx=20.0f/sw, asy=20.0f/sh;
-    float arrow[]={nx,ny+asy, nx-asx,ny-asy/2, nx+asx,ny-asy/2};
+    float nx=(float)(sw-JUMP_BTN_OFFSET)/sw*2-1, ny=1-(float)(sh-JUMP_BTN_OFFSET)/sh*2, asx=20.0f/sw, asy=20.0f/sh;
+    float arrow[]={nx,ny+asy, nx-asx,ny-asy/2.0f, nx+asx,ny-asy/2.0f};
     glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), 0,0,0,1); glUniform1i(glGetUniformLocation(uiProg,"useTex"), 0);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLES,0,3);
     draw_ring(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,0.6f);
