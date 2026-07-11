@@ -29,7 +29,6 @@ void copy_to_clipboard(struct android_app* app, const char* text) {
 
 unsigned int game_seed = 0;
 bool fatal_error = false;
-char err_log[1024] = "OK";
 
 static void engine_draw_frame(struct engine* eng) {
     if (!eng->display || !eng->surface) return;
