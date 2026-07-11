@@ -88,13 +88,14 @@ struct engine {
     unsigned char invSlots[INV_SLOTS];
     int selectedSlot;
 
-    bool isBreaking, isPlacing;
+    bool isBreaking;
     float miningProgress;
     int miningX, miningY, miningZ;
 
     int animBreakTimer, animPlaceTimer;
     float animBlockX, animBlockY, animBlockZ;
-    bool animActive, animIsBreak, joyTouched;
+    unsigned char animBlockType; // <--- ДОБАВЛЕНО
+    bool animActive, animIsBreak;
     int gameState;
 };
 #endif
