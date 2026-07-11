@@ -14,21 +14,12 @@ static unsigned int hash2d(int x, int z) {
     return h ^ (h >> 16);
 }
 
-static float smooth_noise(float fx, float fz) {
-    int ix = (int)floorf(fx), iz = (int)floorf(fz);
-    float dx = fx - ix, dz = fz - iz;
-    dx = dx * dx * (3.0f - 2.0f * dx); dz = dz * dz * (3.0f - 2.0f * dz);
-    float v00 = (float)(hash2d(ix, iz) & 0xFFFF) / 65535.0f;
-    float v10 = (float)(hash2d(ix+1, iz) & 0xFFFF) / 65535.0f;
-    float v01 = (float)(hash2d(ix, iz+1) & 0xFFFF) / 65535.0f;
-    float v11 = (float)(hash2d(ix+1, iz+1) & 0xFFFF) / 65535.0f;
-    return v00 + (v10 - v00) * dx + (v01 - v01) * dz; // Упрощено для скорости
-}
+static float noise2d(int x, int z) { return (float)(hash2d(x, z) & 0xFFFF) / 65535.0f; }
 
 static int get_height(int wx, int wz) {
-    float val = smooth_noise(wx * 0.05f, wz * 0.05f) * 10.0f;
-    int h = (int)val + 8;
-    return (h < 2) ? 2 : (h > CHUNK_H - 10 ? CHUNK_H - 10 : h);
+    float val = (noise2d(wx, wz) + noise2d(wx+1, wz) + noise2d(wx, wz+1)) * 0.33f;
+    int h = (int)(val * 10.0f) + 8;
+    return h;
 }
 
 static void pos_to_block(float rx, float ry, float rz, int* wx, int* wy, int* wz) {
@@ -48,7 +39,7 @@ static int world_block_at(struct engine* eng, int wx, int wy, int wz) {
 
 static void try_place_tree(struct engine* eng, int bx, int bz, int h) {
     unsigned int hsh = hash2d(eng->loadCenterX-LOAD_RADIUS+bx, eng->loadCenterZ-LOAD_RADIUS+bz);
-    if ((hsh % 120) == 0 && bx > 3 && bx < WORLD_BUF-4 && bz > 3 && bz < WORLD_BUF-4) {
+    if ((hsh % 150) == 0 && bx > 3 && bx < WORLD_BUF-4 && bz > 3 && bz < WORLD_BUF-4) {
         int treeH = 4 + (hsh % 3);
         for (int i = 0; i < treeH; i++) eng->blocks[bx][h+i][bz] = BLOCK_WOOD;
         for (int lx = -2; lx <= 2; lx++)
@@ -83,9 +74,7 @@ static void world_set_block(struct engine* eng, int wx, int wy, int wz, unsigned
     int bx, bz; world_to_buf(eng, wx, wz, &bx, &bz);
     if (bx < 0 || bx >= WORLD_BUF || bz < 0 || bz >= WORLD_BUF || wy < 0 || wy >= CHUNK_H) return;
     eng->blocks[bx][wy][bz] = val;
-    if (eng->editCount < MAX_EDITS) {
-        eng->edits[eng->editCount++] = (struct block_edit){wx, wy, wz, val};
-    }
+    if (eng->editCount < MAX_EDITS) eng->edits[eng->editCount++] = (struct block_edit){wx, wy, wz, val};
     eng->meshDirty = true;
 }
 
@@ -107,18 +96,18 @@ static void update_faces(struct engine* eng) {
 
 static void update_world(struct engine* eng) {
     int px = (int)floorf(eng->camPos[0]), pz = (int)floorf(-eng->camPos[2]);
-    if (!eng->worldLoaded || (px-eng->loadCenterX)*(px-eng->loadCenterX) + (pz-eng->loadCenterZ)*(pz-eng->loadCenterZ) > 100)
+    if (!eng->worldLoaded || (px-eng->loadCenterX)*(px-eng->loadCenterX) + (pz-eng->loadCenterZ)*(pz-eng->loadCenterZ) > 64)
         load_blocks_around(eng, px, pz);
 }
 
-static bool raycast(struct engine* eng, int* hitX, int* hitY, int* hitZ, int* prevX, int* prevY, int* prevZ) {
+static bool raycast(struct engine* eng, int* hX, int* hY, int* hZ, int* pX, int* pY, int* pZ) {
     float view[16]; mat4_lookat(view, eng->camPos, eng->camRot[0], eng->camRot[1]);
     float dx = -view[2], dy = -view[6], dz = -view[10];
-    *prevX=-9999;
+    *pX=-9999;
     for (float t=0.1f; t<RAY_DIST; t+=RAY_STEP) {
         int wx,wy,wz; pos_to_block(eng->camPos[0]+dx*t, eng->camPos[1]+dy*t, eng->camPos[2]+dz*t, &wx,&wy,&wz);
-        if (world_block_at(eng,wx,wy,wz)>0) { *hitX=wx;*hitY=wy;*hitZ=wz; return true; }
-        *prevX=wx;*prevY=wy;*prevZ=wz;
+        if (world_block_at(eng,wx,wy,wz)>0) { *hX=wx;*hY=wy;*hZ=wz; return true; }
+        *pX=wx;*pY=wy;*pZ=wz;
     }
     return false;
 }
