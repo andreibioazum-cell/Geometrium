@@ -1,4 +1,4 @@
-#ifndef RENDER_H
+ #ifndef RENDER_H
 #define RENDER_H
 
 #include <GLES2/gl2.h>
@@ -52,9 +52,7 @@ void init_textures(struct engine* eng) {
 }
 
 static void p_v(float* b, int* i, float x, float y, float z, float u, float v, float nx, float ny, float nz, float t) {
-    float d[] = {x,y,z, u,v, nx,ny,nz, t};
-    memcpy(&b[*i], d, sizeof(d));
-    *i += 9;
+    float d[] = {x,y,z, u,v, nx,ny,nz, t}; memcpy(&b[*i], d, sizeof(d)); *i += 9;
 }
 
 static void rebuild_vbo(struct engine* eng) {
@@ -67,7 +65,6 @@ static void rebuild_vbo(struct engine* eng) {
     eng->visibleFaceCount = fc;
     if (fc == 0) return;
     float* buf = (float*)malloc(fc * 6 * 9 * sizeof(float));
-    if(!buf) return;
     int idx = 0, ox = eng->loadCenterX - LOAD_RADIUS, oz = eng->loadCenterZ - LOAD_RADIUS;
     for (int x=0; x<WORLD_BUF; x++) for (int y=0; y<CHUNK_H; y++) for (int z=0; z<WORLD_BUF; z++) {
         unsigned char f = eng->faces[x][y][z]; if(!f) continue;
@@ -101,7 +98,6 @@ static void render_anim(struct engine* eng) {
 void render_world(struct engine* eng) {
     if (eng->meshDirty) rebuild_vbo(eng);
     glEnable(GL_DEPTH_TEST); glUseProgram(eng->program);
-    glUniform3f(glGetUniformLocation(eng->program, "uCP"), eng->camPos[0], eng->camPos[1], eng->camPos[2]);
     glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, eng->texGrassTop); glUniform1i(glGetUniformLocation(eng->program, "uT1"), 0);
     glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, eng->texGrassSide); glUniform1i(glGetUniformLocation(eng->program, "uT2"), 1);
     glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, eng->texGrassDown); glUniform1i(glGetUniformLocation(eng->program, "uT3"), 2);
@@ -141,6 +137,20 @@ static void draw_r(float cx, float cy, float hw, float hh, int sw, int sh, float
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLES,0,6);
 }
 
+static void draw_ring(float cx, float cy, float r, float t, int sw, int sh, float cr, float cg, float cb, float ca) {
+    float nx=(cx/sw)*2-1, ny=1-(cy/sh)*2, rox=(r/sw)*2, roy=(r/sh)*2, rix=((r-t)/sw)*2, riy=((r-t)/sh)*2;
+    float v[132]; for(int i=0;i<=32;i++){ float a=i/32.0f*2*PI, c=cosf(a), s=sinf(a); v[i*4]=nx+c*rox; v[i*4+1]=ny+s*roy; v[i*4+2]=nx+c*rix; v[i*4+3]=ny+s*riy; }
+    glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca); glUniform1i(glGetUniformLocation(uiProg,"useTex"), 0);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLE_STRIP,0,66);
+}
+
+static void draw_circle(float cx, float cy, float r, int sw, int sh, float cr, float cg, float cb, float ca) {
+    float nx=(cx/sw)*2-1, ny=1-(cy/sh)*2, rx=(r/sw)*2, ry=(r/sh)*2;
+    float v[52]; v[0]=nx; v[1]=ny; for(int i=0;i<=24;i++){ float a=i/24.0f*2*PI; v[(i+1)*2]=nx+cosf(a)*rx; v[(i+1)*2+1]=ny+sinf(a)*ry; }
+    glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), cr,cg,cb,ca); glUniform1i(glGetUniformLocation(uiProg,"useTex"), 0);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,v); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLE_FAN,0,26);
+}
+
 static void draw_t(float cx, float cy, float hw, float hh, int sw, int sh, GLuint tex) {
     float nx=(cx/sw)*2-1, ny=1-(cy/sh)*2, rw=(hw/sw)*2, rh=(hh/sh)*2;
     float v[] = {nx-rw,ny-rh,0,1, nx+rw,ny-rh,1,1, nx+rw,ny+rh,1,0, nx-rw,ny-rh,0,1, nx+rw,ny+rh,1,0, nx-rw,ny+rh,0,0};
@@ -155,10 +165,17 @@ void draw_ui(struct engine* eng) {
     int sw=eng->width, sh=eng->height;
     glDisable(GL_DEPTH_TEST); glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     draw_r(sw/2, sh/2, 10, 1, sw, sh, 1,1,1,1); draw_r(sw/2, sh/2, 1, 10, sw, sh, 1,1,1,1);
-    draw_r(JOY_X_OFFSET, sh-JOY_Y_OFFSET, STICK_RADIUS, STICK_RADIUS, sw, sh, 0,0,0,0.6f);
-    draw_r(sw-JUMP_BTN_OFFSET, sh-JUMP_BTN_OFFSET, 30, 30, sw, sh, 0,0,0,0.6f);
-    draw_r(sw-BREAK_BTN_X, BREAK_BTN_Y, 20, 20, sw, sh, 0,0,0,0.6f);
-    draw_r(sw-PLACE_BTN_X, PLACE_BTN_Y, 20, 20, sw, sh, 0,0,0,0.6f);
+    draw_ring(JOY_X_OFFSET, sh-JOY_Y_OFFSET, JOY_RADIUS, 4, sw, sh, 0,0,0,0.6f);
+    draw_circle(JOY_X_OFFSET+eng->moveDirX*JOY_RADIUS*0.6f, sh-JOY_Y_OFFSET+eng->moveDirZ*JOY_RADIUS*0.6f, STICK_RADIUS, sw, sh, 0,0,0,0.8f);
+    draw_ring(sw-JUMP_BTN_OFFSET, sh-JUMP_BTN_OFFSET, JUMP_BTN_SIZE, 4, sw, sh, 0,0,0,0.6f);
+    float nx=(sw-JUMP_BTN_OFFSET)/sw*2-1, ny=1-(sh-JUMP_BTN_OFFSET)/sh*2, as=20.0f/sw;
+    float arrow[]={nx,ny+as, nx-as,ny-as/2, nx+as,ny-as/2};
+    glUseProgram(uiProg); glUniform4f(glGetUniformLocation(uiProg,"col"), 0,0,0,1); glUniform1i(glGetUniformLocation(uiProg,"useTex"), 0);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,arrow); glEnableVertexAttribArray(0); glDrawArrays(GL_TRIANGLES,0,3);
+    draw_ring(sw-BREAK_BTN_X, BREAK_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,0.6f);
+    draw_r(sw-BREAK_BTN_X, BREAK_BTN_Y, 8, 2, sw, sh, 0,0,0,1);
+    draw_ring(sw-PLACE_BTN_X, PLACE_BTN_Y, ACTION_BTN_SIZE, 3, sw, sh, 0,0,0,0.6f);
+    draw_r(sw-PLACE_BTN_X, PLACE_BTN_Y, 8, 2, sw, sh, 0,0,0,1); draw_r(sw-PLACE_BTN_X, PLACE_BTN_Y, 2, 8, sw, sh, 0,0,0,1);
     for(int i=0; i<INV_SLOTS; i++) {
         float sx = (sw-INV_SLOTS*50)/2 + i*50 + 25, sy = sh-INV_Y_OFFSET;
         draw_r(sx, sy, 22, 22, sw, sh, 0.1f, 0.1f, 0.1f, 0.6f);
