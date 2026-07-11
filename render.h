@@ -150,16 +150,14 @@ void draw_ui(struct engine* eng) {
     int sw=eng->width, sh=eng->height;
     glDisable(GL_DEPTH_TEST); glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     draw_r(sw/2, sh/2, 10, 1, sw, sh, 1,1,1,1); draw_r(sw/2, sh/2, 1, 10, sw, sh, 1,1,1,1);
-    // КНОПКИ ЧЕРНЫЕ
     draw_r(JOY_X_OFFSET, sh-JOY_Y_OFFSET, STICK_RADIUS, STICK_RADIUS, sw, sh, 0,0,0,0.6f);
     draw_r(sw-JUMP_BTN_OFFSET, sh-JUMP_BTN_OFFSET, 30, 30, sw, sh, 0,0,0,0.6f);
     draw_r(sw-BREAK_BTN_X, BREAK_BTN_Y, 20, 20, sw, sh, 0,0,0,0.6f);
     draw_r(sw-PLACE_BTN_X, PLACE_BTN_Y, 20, 20, sw, sh, 0,0,0,0.6f);
-    // ИНВЕНТАРЬ
     for(int i=0; i<INV_SLOTS; i++) {
         float sx = (sw-INV_SLOTS*50)/2 + i*50 + 25, sy = sh-INV_Y_OFFSET;
         draw_r(sx, sy, 22, 22, sw, sh, 0.1f, 0.1f, 0.1f, 0.6f);
-        if(i == eng->selectedSlot) { // КВАДРАТНОЕ ВЫДЕЛЕНИЕ
+        if(i == eng->selectedSlot) {
             draw_r(sx, sy-22, 22, 2, sw, sh, 1,1,1,1); draw_r(sx, sy+22, 22, 2, sw, sh, 1,1,1,1);
             draw_r(sx-22, sy, 2, 22, sw, sh, 1,1,1,1); draw_r(sx+22, sy, 2, 22, sw, sh, 1,1,1,1);
         }
