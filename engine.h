@@ -25,7 +25,6 @@
 #define GRAVITY 0.005f
 #define JUMP_FORCE 0.12f
 #define TERM_VEL -0.25f
-#define HEAD_MARGIN 0.05f   // добавлено для physics.h
 
 #define LOAD_RADIUS 14
 #define WORLD_BUF (LOAD_RADIUS * 2 + 1)

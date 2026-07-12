@@ -32,7 +32,7 @@ static void rebuild_vbo(struct engine* e) {
         if(f&4){pv(b,&idx,x0,y1,z1,0,0,0,1,0,t);pv(b,&idx,x1,y1,z1,1,0,0,1,0,t);pv(b,&idx,x1,y1,z0,1,1,0,1,0,t);pv(b,&idx,x0,y1,z1,0,0,0,1,0,t);pv(b,&idx,x1,y1,z0,1,1,0,1,0,t);pv(b,&idx,x0,y1,z0,0,1,0,1,0,t);}
         if(f&8){pv(b,&idx,x0,y0,z0,0,0,0,-1,0,t);pv(b,&idx,x1,y0,z0,1,0,0,-1,0,t);pv(b,&idx,x1,y0,z1,1,1,0,-1,0,t);pv(b,&idx,x0,y0,z0,0,0,0,-1,0,t);pv(b,&idx,x1,y0,z1,1,1,0,-1,0,t);pv(b,&idx,x0,y0,z1,0,1,0,-1,0,t);}
         if(f&16){pv(b,&idx,x1,y0,z0,0,1,0,0,-1,t);pv(b,&idx,x0,y0,z0,1,1,0,0,-1,t);pv(b,&idx,x0,y1,z0,1,0,0,0,-1,t);pv(b,&idx,x1,y0,z0,0,1,0,0,-1,t);pv(b,&idx,x0,y1,z0,1,0,0,0,-1,t);pv(b,&idx,x1,y1,z0,0,0,0,0,-1,t);}
-        if(f&32){pv(b,&idx,x0,y0,z1,0,1,0,0,1,t);pv(b,&idx,x1,y0,z1,1,1,0,0,1,t);pv(b,&idx,x1,y1,z1,1,0,0,0,1,t);pv(b,&idx,x0,y0,z1,0,1,0,0,1,t);pv(b,&idx,x1,y1,z1,1,0,0,0,1,t);pv(b,&idx,x0,y1,z1,0,0,0,0,1,t);} // исправлено: добавлен 0 (nz) между ny и nz
+        if(f&32){pv(b,&idx,x0,y0,z1,0,1,0,0,1,t);pv(b,&idx,x1,y0,z1,1,1,0,0,1,t);pv(b,&idx,x1,y1,z1,1,0,0,0,1,t);pv(b,&idx,x0,y0,z1,0,1,0,0,1,t);pv(b,&idx,x1,y1,z1,1,0,0,0,1,t);pv(b,&idx,x0,y1,z1,0,0,0,1,t);}
     }
     if(!e->vbo)glGenBuffers(1,&e->vbo); glBindBuffer(34962,e->vbo); glBufferData(34962,fc*54*4,b,35044); free(b); e->meshDirty=false;
 }
