@@ -1,94 +1,63 @@
-#ifndef PHYSICS_H
-#define PHYSICS_H
-
-#include <stdbool.h>
-#include <math.h>
 #include "engine.h"
-#include "world.h"
+#include <arm_neon.h>
+#include <math.h>
+#include <stdlib.h>
 
-static bool is_solid(struct engine* eng, float rx, float ry, float rz) {
-    int wx, wy, wz;
-    pos_to_block(rx, ry, rz, &wx, &wy, &wz);
-    return world_block_at(eng, wx, wy, wz) > 0;
+// Твоя функция очистки экрана на NEON
+void graphics_clear(RenderBuffer* rb, uint32_t color) {
+    uint32x4_t v_color = vdupq_n_u32(color);
+    int total_pixels = rb->stride * rb->height;
+    int i = 0;
+    for (; i <= total_pixels - 4; i += 4) {
+        vst1q_u32(&rb->pixels[i], v_color);
+    }
+    for (; i < total_pixels; i++) rb->pixels[i] = color;
+    
+    // Очистка Z-буфера
+    for (int j = 0; j < total_pixels; j++) rb->z_buffer[j] = 1000.0f;
 }
 
-static bool check_box(struct engine* eng, float x, float y, float z) {
-    return is_solid(eng, x-PLAYER_W, y, z-PLAYER_W) ||
-           is_solid(eng, x+PLAYER_W, y, z-PLAYER_W) ||
-           is_solid(eng, x-PLAYER_W, y, z+PLAYER_W) ||
-           is_solid(eng, x+PLAYER_W, y, z+PLAYER_W);
-}
+// Математика проекции 3D -> 2D (вместо шейдеров)
+void project_block(struct engine* eng, float x, float y, float z, int* outX, int* outY, float* outZ) {
+    float dx = x - eng->camPos[0];
+    float dy = y - eng->camPos[1];
+    float dz = z - eng->camPos[2];
 
-static bool check_ground(struct engine* eng, float x, float footY, float z) {
-    return check_box(eng, x, footY - 0.05f, z);
-}
+    // Поворот камеры
+    float cosY = cosf(eng->camRot[1]), sinY = sinf(eng->camRot[1]);
+    float tx = dx * cosY - dz * sinY;
+    float tz = dx * sinY + dz * cosY;
 
-static bool check_ceiling(struct engine* eng, float x, float headY, float z) {
-    return check_box(eng, x, headY, z);
-}
-
-static bool check_wall(struct engine* eng, float x, float eyeY, float z) {
-    float foot = eyeY - EYE_H;
-    return check_box(eng, x, foot+0.1f, z) || check_box(eng, x, foot+0.6f, z) ||
-           check_box(eng, x, foot+1.2f, z) || check_box(eng, x, foot+1.8f, z);
-}
-
-static bool check_inside(struct engine* eng, float x, float eyeY, float z) {
-    return is_solid(eng, x, eyeY, z) || is_solid(eng, x-PLAYER_W, eyeY, z) ||
-           is_solid(eng, x+PLAYER_W, eyeY, z) || is_solid(eng, x, eyeY, z-PLAYER_W) ||
-           is_solid(eng, x, eyeY, z+PLAYER_W);
-}
-
-static void apply_physics(struct engine* eng) {
-    eng->velY -= GRAVITY;
-    if (eng->velY < TERM_VEL) eng->velY = TERM_VEL;
-
-    float nextY = eng->camPos[1] + eng->velY;
-    eng->onGround = false;
-    if (check_ground(eng, eng->camPos[0], eng->camPos[1]-EYE_H, eng->camPos[2]))
-        eng->onGround = true;
-
-    if (eng->velY <= 0) {
-        if (check_ground(eng, eng->camPos[0], nextY-EYE_H, eng->camPos[2])) {
-            eng->velY = 0;
-            eng->onGround = true;
-        } else {
-            eng->camPos[1] = nextY;
-        }
+    *outZ = tz;
+    if (tz > 0.1f) {
+        float fov = eng->rb.height;
+        *outX = (int)(eng->rb.width / 2 + (tx / tz) * fov);
+        *outY = (int)(eng->rb.height / 2 - (dy / tz) * fov);
     } else {
-        if (check_ceiling(eng, eng->camPos[0], nextY+HEAD_MARGIN, eng->camPos[2]))
-            eng->velY = 0;
-        else
-            eng->camPos[1] = nextY;
-    }
-
-    if (eng->isMoving && (eng->moveDirX != 0 || eng->moveDirZ != 0)) {
-        // Скорость уменьшена на 5% (было 0.08f)
-        float speed = 0.076f;
-        float yaw = eng->camRot[1];
-        float fX = sinf(yaw), fZ = -cosf(yaw);
-        float rX = cosf(yaw), rZ = sinf(yaw);
-        float dx = (fX * -eng->moveDirZ + rX * eng->moveDirX) * speed;
-        float dz = (fZ * -eng->moveDirZ + rZ * eng->moveDirX) * speed;
-        if (!check_wall(eng, eng->camPos[0]+dx, eng->camPos[1], eng->camPos[2]))
-            eng->camPos[0] += dx;
-        if (!check_wall(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2]+dz))
-            eng->camPos[2] += dz;
-    }
-
-    if (check_inside(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2])) {
-        for (int i = 0; i < 10; i++) {
-            eng->camPos[1] += 0.1f;
-            if (!check_inside(eng, eng->camPos[0], eng->camPos[1], eng->camPos[2]))
-                break;
-        }
-    }
-
-    if (eng->camPos[1] < -10.0f) {
-        eng->camPos[1] = (float)get_height((int)floorf(eng->camPos[0]),
-                                            (int)floorf(-eng->camPos[2])) + 2.5f;
-        eng->velY = 0;
+        *outX = -1000; *outY = -1000;
     }
 }
 
-#endif
+// Рисование одного блока (пикселями)
+void draw_software_block(struct engine* eng, int bx, int by, int bz, uint32_t color) {
+    int sx, sy; float sz;
+    project_block(eng, (float)bx, (float)by, (float)bz, &sx, &sy, &sz);
+
+    if (sz < 0.1f) return;
+
+    int size = (int)(eng->rb.height / sz); // Размер кубика на экране
+    if (size <= 0) return;
+
+    for (int y = sy - size/2; y < sy + size/2; y++) {
+        if (y < 0 || y >= eng->rb.height) continue;
+        for (int x = sx - size/2; x < sx + size/2; x++) {
+            if (x < 0 || x >= eng->rb.width) continue;
+            
+            int idx = y * eng->rb.stride + x;
+            if (sz < eng->rb.z_buffer[idx]) {
+                eng->rb.pixels[idx] = color;
+                eng->rb.z_buffer[idx] = sz;
+            }
+        }
+    }
+}
