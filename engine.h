@@ -4,33 +4,27 @@
 #include <android_native_app_glue.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <setjmp.h>
 
-// Константы из твоего проекта
-#define WORLD_BUF 29
-#define CHUNK_H 32
-#define JOY_RADIUS 80.0f
-#define JOY_X_OFFSET 130.0f
+#define WORLD_BUF 16
+#define CHUNK_H 16
 
 typedef struct {
-    uint32_t* pixels; // Массив пикселей экрана
-    float* z_buffer;  // Буфер глубины (чтобы блоки не просвечивали)
+    uint32_t* pixels;
+    float* z_buffer;
     int width, height, stride;
 } RenderBuffer;
 
 struct engine {
     struct android_app* app;
-    RenderBuffer rb; // Наш самодельный "экран"
-
-    float camPos[3], camRot[2];
-    float moveDirX, moveDirZ;
-    bool isMoving;
-
-    // Твой массив блоков
-    unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
-    int loadCenterX, loadCenterZ;
+    RenderBuffer rb;
     
-    int movePointerId, lookPointerId;
-    float lastTouchX, lastTouchY;
+    float camPos[3], camRot[2];
+    uint8_t blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
+    
+    // Для защиты от вылетов
+    jmp_buf crash_env; 
+    char last_error[256];
 };
 
 #endif
