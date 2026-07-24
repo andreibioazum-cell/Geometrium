@@ -1,64 +1,83 @@
-#include "engine.h"
+#include <android_native_app_glue.h>
 #include <android/native_window.h>
-#include <malloc.h>
+#include <stdlib.h>
+#include <string.h>  // <-- ЭТО ИСПРАВЛЯЕТ ОШИБКУ memset
+#include <math.h>
+#include "engine.h"
 
-// Внешние функции из graphics.c
-void graphics_clear(RenderBuffer* rb, uint32_t color);
-void draw_software_block(struct engine* eng, int bx, int by, int bz, uint32_t color);
+// Объявляем функции из других файлов, чтобы компилятор их видел
+extern void graphics_clear(RenderBuffer* rb, uint32_t color);
+extern void draw_software_block(struct engine* eng, int bx, int by, int bz, uint32_t color);
+extern int32_t engine_handle_input(struct android_app* app, AInputEvent* event);
 
-void android_main(struct android_app* app) {
-    struct engine* eng = (struct engine*)malloc(sizeof(struct engine));
-    memset(eng, 0, sizeof(struct engine));
-    app->userData = eng;
+void android_main(struct android_app* s) {
+    // 1. Выделяем память под движок
+    struct engine* e = (struct engine*)malloc(sizeof(struct engine));
+    if (!e) return;
+    
+    // 2. Обнуляем структуру (теперь memset будет работать)
+    memset(e, 0, sizeof(struct engine));
+    
+    e->app = s;
+    e->movePointerId = e->lookPointerId = -1;
+    s->userData = e;
+    s->onInputEvent = engine_handle_input;
 
-    // Генерация мира (как в твоем world.h)
+    // 3. Генерация тестового мира
     for (int x = 0; x < WORLD_BUF; x++) {
         for (int z = 0; z < WORLD_BUF; z++) {
-            eng->blocks[x][5][z] = 1; // Слой земли
+            e->blocks[x][5][z] = 1; // Создаем плоский мир на высоте 5
         }
     }
-    eng->camPos[0] = 15; eng->camPos[1] = 7; eng->camPos[2] = 5;
+    
+    // Начальная позиция камеры
+    e->camPos[0] = 14.0f; e->camPos[1] = 8.0f; e->camPos[2] = 14.0f;
 
+    // Главный цикл
     while (1) {
-        int events;
-        struct android_poll_source* source;
-        while (ALooper_pollOnce(0, 0, &events, (void**)&source) >= 0) {
-            if (source) source->process(app, source);
-            if (app->destroyRequested) return;
+        int ev;
+        struct android_poll_source* src;
+        while (ALooper_pollOnce(0, 0, &ev, (void**)&src) >= 0) {
+            if (src) src->process(s, src);
+            if (s->destroyRequested) {
+                if (e->rb.z_buffer) free(e->rb.z_buffer);
+                free(e);
+                return;
+            }
         }
 
-        if (app->window) {
-            ANativeWindow_Buffer win_buffer;
-            // Блокируем окно для прямого доступа к пикселям
-            if (ANativeWindow_lock(app->window, &win_buffer, NULL) >= 0) {
+        // Если окно доступно, рисуем в него напрямую
+        if (s->window) {
+            ANativeWindow_Buffer win_buf;
+            if (ANativeWindow_lock(s->window, &win_buf, NULL) >= 0) {
                 
-                eng->rb.pixels = (uint32_t*)win_buffer.bits;
-                eng->rb.width = win_buffer.width;
-                eng->rb.height = win_buffer.height;
-                eng->rb.stride = win_buffer.stride;
+                // Настраиваем буфер рендера на текущее окно
+                e->rb.pixels = (uint32_t*)win_buf.bits;
+                e->rb.width = win_buf.width;
+                e->rb.height = win_buf.height;
+                e->rb.stride = win_buf.stride;
 
-                // Создаем Z-буфер если его нет
-                if (!eng->rb.z_buffer) {
-                    eng->rb.z_buffer = malloc(eng->rb.width * eng->rb.height * sizeof(float));
+                // Создаем или пересоздаем Z-буфер под размер экрана
+                if (!e->rb.z_buffer) {
+                    e->rb.z_buffer = (float*)malloc(e->rb.width * e->rb.height * sizeof(float));
                 }
 
-                // 1. Очистка экрана (Твой NEON)
-                graphics_clear(&eng->rb, 0xFF88CCFF); // Голубое небо
+                // Очистка экрана (Твой NEON код)
+                graphics_clear(&e->rb, 0xFF88CCFF); 
 
-                // 2. Рисуем мир пикселями
+                // Рендеринг блоков
                 for (int x = 0; x < WORLD_BUF; x++) {
                     for (int z = 0; z < WORLD_BUF; z++) {
                         for (int y = 0; y < CHUNK_H; y++) {
-                            if (eng->blocks[x][y][z]) {
-                                uint32_t col = (y > 5) ? 0xFF00FF00 : 0xFF777777;
-                                draw_software_block(eng, x, y, z, col);
+                            if (e->blocks[x][y][z]) {
+                                // Рисуем блок (функция в graphics.c)
+                                draw_software_block(e, x, y, z, 0xFF00AA00);
                             }
                         }
                     }
                 }
 
-                // Выводим все на экран
-                ANativeWindow_unlockAndPost(app->window);
+                ANativeWindow_unlockAndPost(s->window);
             }
         }
     }
