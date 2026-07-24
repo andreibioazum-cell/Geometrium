@@ -2,99 +2,50 @@
 #define ENGINE_H
 
 #include <android_native_app_glue.h>
-#include <EGL/egl.h>
-#include <GLES2/gl2.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 #define PI 3.14159265f
 #define JOY_RADIUS 80.0f
 #define JOY_X_OFFSET 130.0f
-#define JOY_Y_OFFSET 130.0f
 #define STICK_RADIUS 32.0f
 #define JUMP_BTN_SIZE 80.0f
 #define JUMP_BTN_OFFSET 130.0f
-#define ACTION_BTN_SIZE 45.0f
-#define BREAK_BTN_X 80.0f
-#define BREAK_BTN_Y 80.0f
-#define PLACE_BTN_X 80.0f
-#define PLACE_BTN_Y 190.0f
 
+#define WORLD_BUF 29
+#define CHUNK_H 32
 #define PLAYER_W 0.4f
 #define EYE_H 1.65f
-#define GAME_FOV 1.4915f
-#define GRAVITY 0.005f
-#define JUMP_FORCE 0.12f
-#define TERM_VEL -0.25f
 
-#define LOAD_RADIUS 14
-#define WORLD_BUF (LOAD_RADIUS * 2 + 1)
-#define CHUNK_H 32
-
-#define FACE_XP 0x01
-#define FACE_XN 0x02
-#define FACE_YP 0x04
-#define FACE_YN 0x08
-#define FACE_ZP 0x10
-#define FACE_ZN 0x20
-
+// Типы блоков
 #define BLOCK_AIR 0
 #define BLOCK_GRASS 1
 #define BLOCK_WOOD 2
 #define BLOCK_LEAVES 3
 
-#define INV_SLOTS 9
-#define INV_SLOT_SIZE 46.0f
-#define INV_PADDING 4.0f
-#define INV_Y_OFFSET 50.0f
-
-#define ANIM_BREAK_FRAMES 15
-#define ANIM_PLACE_FRAMES 12
-#define MAX_EDITS 1024
-#define RAY_DIST 6.0f
-#define RAY_STEP 0.05f
-
-#define STATE_MENU 0
-#define STATE_PLAYING 1
-
-struct block_edit { int wx, wy, wz; unsigned char val; };
+typedef struct {
+    uint32_t* pixels;
+    float* z_buffer;
+    int width, height, stride;
+} RenderBuffer;
 
 struct engine {
     struct android_app* app;
-    EGLDisplay display; EGLSurface surface; EGLContext context;
-    int32_t width, height;
-    GLuint program;
-    GLuint texGrassTop, texGrassSide, texGrassDown;
-    GLuint texLeaves, texTreeSide, texTreeTop;
-
+    RenderBuffer rb;
+    
     float camPos[3], camRot[2], velY;
     float moveDirX, moveDirZ;
-    float lastTouchX, lastTouchY;
     bool isMoving, onGround;
     int movePointerId, lookPointerId;
+    float lastTouchX, lastTouchY;
 
-    GLuint vbo;
-    int visibleFaceCount;
-    bool meshDirty;
-
+    unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
     int loadCenterX, loadCenterZ;
     bool worldLoaded;
-    unsigned char blocks[WORLD_BUF][CHUNK_H][WORLD_BUF];
-    unsigned char faces[WORLD_BUF][CHUNK_H][WORLD_BUF];
-
-    struct block_edit edits[MAX_EDITS];
-    int editCount;
-
-    unsigned char invSlots[INV_SLOTS];
+    
     int selectedSlot;
-
-    bool isBreaking;
-    float miningProgress;
-    int miningX, miningY, miningZ;
-
-    int animBreakTimer, animPlaceTimer;
-    float animBlockX, animBlockY, animBlockZ;
-    unsigned char animBlockType;
-    bool animActive, animIsBreak;
-    int gameState;
+    uint32_t* textures[6]; // Текстуры в виде массивов пикселей
+    int texW, texH;
 };
+
 #endif
